@@ -203,15 +203,14 @@ hypermnesia install-antigravity-hooks</code></pre>
     <h2 class="reveal">Quick start</h2>
     <div class="codeblock reveal">
       <button class="copy" data-copy>copy</button>
-      <pre><code>git clone https://github.com/tweibley/hypermnesia &amp;&amp; cd hypermnesia
-bash Scripts/make-app.sh                       <span class="cm"># → Hypermnesia.app</span>
-swift build                                    <span class="cm"># → .build/debug/hypermnesia</span>
+      <pre><code>brew tap tweibley/tap
+brew install --cask hypermnesia                <span class="cm"># notarized app + CLI on PATH</span>
 
 hypermnesia backfill --project ~/some/repo     <span class="cm"># seed memory from past sessions</span>
 hypermnesia setup --with-mcp                   <span class="cm"># hooks + recall/ask/remember</span>
-open Hypermnesia.app</code></pre>
+open -a Hypermnesia</code></pre>
     </div>
-    <p class="req reveal">Requires macOS&nbsp;14+, a Swift&nbsp;6 toolchain, and <code>claude</code> on <code>PATH</code>. A <code>GEMINI_API_KEY</code> enables the recommended classifier; without one it falls back to <code>claude&nbsp;-p</code>. <code>hypermnesia&nbsp;doctor</code> verifies the result.</p>
+    <p class="req reveal">Requires macOS&nbsp;14+ and <code>claude</code> on <code>PATH</code>. A <code>GEMINI_API_KEY</code> enables the recommended classifier; without one it falls back to <code>claude&nbsp;-p</code>. <code>hypermnesia&nbsp;doctor</code> verifies the result. Prefer building from source? <a href="https://github.com/tweibley/hypermnesia#build-from-source">The README has you covered</a>.</p>
   </section>
 
   <!-- ============ FAQ ============ -->
