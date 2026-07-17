@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One run per branch; a new push cancels the stale run instead of billing both.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-latest
+    # Hard cap: macOS minutes bill at 10x on private repos, and GitHub's default
+    # job limit is 6 hours — a single hung test run can consume the entire free tier.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode (pin to 26.1.x — the Swift 6.2 series)
+        # The suite is developed and verified on Swift 6.2. Newer Xcodes on the image (26.6 →
+        # Swift 6.3.3) ship a swift-testing whose in-process concurrent runner wedges this suite
+        # before executing a single test body (announce-all-then-freeze, reproduced 4×; note
+        # `swift test` without --parallel does NOT serialize swift-testing, so only the toolchain
+        # pin actually avoids it). Take the newest 26.1.x patch; fall back to newest-overall only
+        # if the image drops the series — if that fallback ever fires and CI hangs again, this
+        # comment is the first thing to re-read.
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26.1*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1); fi
+          echo "Selected: $XCODE"
+          sudo xcode-select -s "$XCODE"
+      - name: Toolchain
+        run: |
+          swift --version
+          echo "Available Xcodes:"; ls -d /Applications/Xcode*.app
+      - name: Build
+        run: swift build --build-tests
+      - name: Test
+        timeout-minutes: 10
+        # The `script` pty keeps output line-buffered. The watcher samples the test process if it
+        # is still alive after 150s (the suite takes ~3s locally): the printed thread stacks say
+        # exactly where a runner-only hang is stuck, instead of another unattributable timeout.
+        run: |
+          script -q /tmp/test.log swift test --parallel &
+          TEST_PID=$!
+          ( sleep 150
+            if kill -0 $TEST_PID 2>/dev/null; then
+              echo "=== STILL RUNNING AFTER 150s — SAMPLING TEST PROCESSES ==="
+              for pid in $(pgrep -f 'swiftpm-testing-helper|PackageTests'); do
+                sample "$pid" 3 -file "/tmp/sample_$pid.txt" 2>/dev/null || true
+              done
+              head -c 40000 /tmp/sample_*.txt 2>/dev/null || echo "no samples captured"
+            fi ) &
+          WATCHER=$!
+          wait $TEST_PID; STATUS=$?
+          kill $WATCHER 2>/dev/null || true
+          echo "=== test output tail ==="; tail -30 /tmp/test.log
+          exit $STATUS
+      - name: App bundle builds
+        timeout-minutes: 5
+        run: bash Scripts/make-app.sh

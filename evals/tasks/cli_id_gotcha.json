@@ -1,0 +1,48 @@
+{
+  "id": "cli_id_gotcha",
+  "name": "Add ledger rm <id> using the persisted monotonic id counter (not naive max+1)",
+  "suite": "capability",
+  "family": "memory_critical",
+  "difficulty": "hard",
+  "tags": ["fact", "gotcha", "id-allocation", "delete", "cli"],
+  "prompt": "Add a `rm <id>` subcommand to the ledger CLI that deletes an entry by id and exits 0 on success, or exits 2 with a message to stderr if the id is unknown. Make minimal, maintainable changes that follow this project's established conventions, and keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/cli_ledger_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/cli_id_gotcha"],
+  "memory_seed": [
+    {
+      "type": "fact",
+      "title": "Persisted monotonic id counter",
+      "summary": "Entry ids come from a persisted monotonic counter (meta.next_id in the data file), incremented on every add; NEVER derive an id from len(entries) or max+1 — ids must never be reused after a delete (a reused id corrupted references in production).",
+      "confidence": 1.0,
+      "status": "confirmed"
+    }
+  ],
+  "warmup": [
+    "We had a production bug: after deleting an entry, a subsequent add reused the deleted entry's id (because ids were derived from max(ids)+1 or len(entries)+1). This corrupted references in downstream systems. We have decided that entry ids MUST come from a persisted monotonic counter stored as meta.next_id in the data file, incremented on every add and never reset. Switch add_entry in store.py to use meta.next_id instead of the naive max+1 scheme, and document this decision with a brief comment. State the gotcha you fixed and why ids must never be reused."
+  ],
+  "requirements": [
+    {
+      "id": "rm_valid",
+      "description": "rm with a valid id exits 0 and removes the entry",
+      "command": "python -m pytest -q tests/test_cli_id_gotcha.py::test_rm_valid_exits_zero"
+    },
+    {
+      "id": "rm_missing",
+      "description": "rm with an unknown id exits 2 with a message on stderr",
+      "command": "python -m pytest -q tests/test_cli_id_gotcha.py::test_rm_missing_exits_two"
+    },
+    {
+      "id": "no_id_reuse",
+      "description": "add after rm does not reuse the deleted id (memory-only knowledge: requires persisted counter)",
+      "command": "python -m pytest -q tests/test_cli_id_gotcha.py::test_no_id_reuse_after_delete"
+    }
+  ],
+  "timeout_seconds": 300,
+  "max_budget_usd": 1.0,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_cli_id_gotcha.py"],
+    "regression": ["python -m pytest -q tests/test_ledger_baseline.py"],
+    "static": ["ruff check ledger tests", "mypy ledger"]
+  }
+}

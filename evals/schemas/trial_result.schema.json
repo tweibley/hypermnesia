@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hypermnesia.local/evals/trial_result.schema.json",
+  "type": "object",
+  "required": [
+    "trial_id",
+    "task_id",
+    "family",
+    "condition",
+    "replicate",
+    "started_at",
+    "finished_at",
+    "duration_seconds",
+    "solved",
+    "completeness",
+    "scores",
+    "manipulation_check",
+    "metrics",
+    "paths"
+  ],
+  "properties": {
+    "trial_id": { "type": "string" },
+    "task_id": { "type": "string" },
+    "family": { "type": "string" },
+    "suite": { "type": "string" },
+    "condition": { "type": "string", "enum": ["baseline", "hooks_only", "mcp_only", "oracle"] },
+    "replicate": { "type": "integer" },
+    "model": { "type": "string" },
+    "effort": { "type": "string" },
+    "judge_model": { "type": ["string", "null"] },
+    "started_at": { "type": "string" },
+    "finished_at": { "type": "string" },
+    "duration_seconds": { "type": "number" },
+    "solved": { "type": "boolean" },
+    "completeness": { "type": "number" },
+    "no_regression": { "type": "boolean" },
+    "static_clean": { "type": "boolean" },
+    "completed_within_limits": { "type": "boolean" },
+    "scores": {
+      "type": "object",
+      "required": ["outcome_pass", "regression_pass", "static_pass", "completeness", "rubric_score"],
+      "properties": {
+        "outcome_pass": { "type": "boolean" },
+        "regression_pass": { "type": "boolean" },
+        "static_pass": { "type": "boolean" },
+        "completeness": { "type": "number" },
+        "rubric_score": { "type": "number" }
+      }
+    },
+    "manipulation_check": {
+      "type": "object",
+      "required": ["injected_context_chars", "recall_calls", "memory_fired"],
+      "properties": {
+        "injected_context_chars": { "type": "integer" },
+        "seeded_memory_count": { "type": "integer" },
+        "recall_calls": { "type": "integer" },
+        "memory_fired": { "type": ["boolean", "null"] },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["num_turns", "total_cost_usd", "tool_error_count", "files_changed"],
+      "properties": {
+        "num_turns": { "type": "integer" },
+        "total_cost_usd": { "type": "number" },
+        "duration_ms": { "type": "integer" },
+        "assistant_message_count": { "type": "integer" },
+        "tool_use_count": { "type": "integer" },
+        "mcp_calls": { "type": "integer" },
+        "recall_calls": { "type": "integer" },
+        "tool_error_count": { "type": "integer" },
+        "completed": { "type": "boolean" },
+        "result_subtype": { "type": "string" },
+        "token_input": { "type": "integer" },
+        "token_output": { "type": "integer" },
+        "token_cache_read": { "type": "integer" },
+        "token_cache_creation": { "type": "integer" },
+        "files_changed": { "type": "integer" },
+        "diff_lines_added": { "type": "integer" },
+        "diff_lines_deleted": { "type": "integer" },
+        "claude_exit_code": { "type": "integer" },
+        "injected_context_chars": { "type": "integer" },
+        "seeded_memory_count": { "type": "integer" }
+      }
+    },
+    "paths": { "type": "object" }
+  },
+  "additionalProperties": true
+}

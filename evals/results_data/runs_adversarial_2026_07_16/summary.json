@@ -1,0 +1,205 @@
+{
+  "n_trials": 36,
+  "conditions": [
+    "baseline",
+    "hooks_only"
+  ],
+  "causal_metrics": {
+    "memory_fired_rate": {
+      "hooks_only": 0.8889
+    },
+    "memory_applied_correctly_rate": {},
+    "near_miss_error_rate": {
+      "baseline": 0.0,
+      "hooks_only": 0.125
+    },
+    "earned_capture_success_rate": null,
+    "mcp_recall_call_rate": {}
+  },
+  "by_condition": {
+    "baseline": {
+      "n_trials": 18,
+      "n_completed": 18,
+      "solve_rate": 1.0,
+      "mean_completeness": 1.0,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 1.0,
+      "completed_rate": 1.0,
+      "median_turns": 10.0,
+      "median_cost_usd": 0.1911,
+      "median_cost_with_warmup_usd": 0.1911,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 6.5,
+      "memory_fired_rate": null,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    },
+    "hooks_only": {
+      "n_trials": 18,
+      "n_completed": 18,
+      "solve_rate": 0.9444,
+      "mean_completeness": 0.9444,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 1.0,
+      "completed_rate": 1.0,
+      "median_turns": 11.0,
+      "median_cost_usd": 0.2354,
+      "median_cost_with_warmup_usd": 0.2354,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 51.0,
+      "memory_fired_rate": 0.8889,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    }
+  },
+  "by_family": {
+    "distractor": {
+      "baseline": {
+        "n_trials": 18,
+        "n_completed": 18,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 10.0,
+        "median_cost_usd": 0.1911,
+        "median_cost_with_warmup_usd": 0.1911,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 6.5,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "hooks_only": {
+        "n_trials": 18,
+        "n_completed": 18,
+        "solve_rate": 0.9444,
+        "mean_completeness": 0.9444,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 11.0,
+        "median_cost_usd": 0.2354,
+        "median_cost_with_warmup_usd": 0.2354,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 51.0,
+        "memory_fired_rate": 0.8889,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    }
+  },
+  "lift_vs_baseline": {
+    "hooks_only_vs_baseline": {
+      "solve_rate": {
+        "delta": -0.0556,
+        "ci95": [
+          -0.2222,
+          0.0
+        ]
+      },
+      "completeness": {
+        "delta": -0.0556,
+        "ci95": [
+          -0.2222,
+          0.0
+        ]
+      },
+      "num_turns": {
+        "delta": 0.1667,
+        "ci95": [
+          -0.8333,
+          1.0556
+        ]
+      },
+      "total_cost_usd": {
+        "delta": 0.0332,
+        "ci95": [
+          0.0114,
+          0.0571
+        ]
+      },
+      "tool_error_count": {
+        "delta": 0.1111,
+        "ci95": [
+          -0.0556,
+          0.3333
+        ]
+      }
+    }
+  },
+  "mechanism_gated_uplift": {
+    "hooks_only": {
+      "delivery_failure_rate": 0.1111,
+      "uplift_all_trials": {
+        "delta": -0.0556,
+        "ci95": [
+          -0.2222,
+          0.0
+        ]
+      },
+      "uplift_fired_only": {
+        "delta": -0.0625,
+        "ci95": [
+          -0.25,
+          0.0
+        ]
+      }
+    }
+  },
+  "application_metrics": {
+    "applied_memory_rate": {
+      "baseline": null,
+      "hooks_only": null
+    },
+    "spurious_application_rate": {
+      "baseline": 0.0,
+      "hooks_only": 0.0556
+    },
+    "citation_use_rate": {
+      "baseline": 1.0,
+      "hooks_only": 1.0
+    }
+  },
+  "per_family_ci": {
+    "distractor": {
+      "baseline": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 18
+      },
+      "hooks_only": {
+        "solve_rate": 0.9444,
+        "ci95": [
+          0.8333,
+          1.0
+        ],
+        "n": 18
+      }
+    }
+  },
+  "verdict": {
+    "memory_critical_uplift_positive": {
+      "result": "n/a",
+      "reason": "memory_critical family or hooks_only absent"
+    },
+    "guardrail_no_harm": {
+      "result": "n/a",
+      "reason": "guardrail family or hooks_only absent"
+    },
+    "distractor_robust": {
+      "result": "FAIL",
+      "hooks_only_failure_rate": 0.0556,
+      "baseline_failure_rate": 0.0,
+      "threshold": "hooks_only <= baseline + 0.05 = 0.05"
+    },
+    "efficiency_gain": {
+      "result": "n/a",
+      "reason": "memory_efficiency family or hooks_only absent"
+    }
+  }
+}

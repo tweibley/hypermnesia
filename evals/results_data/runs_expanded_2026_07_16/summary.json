@@ -1,0 +1,209 @@
+{
+  "n_trials": 48,
+  "conditions": [
+    "baseline",
+    "hooks_only"
+  ],
+  "causal_metrics": {
+    "memory_fired_rate": {
+      "hooks_only": 1.0
+    },
+    "memory_applied_correctly_rate": {
+      "hooks_only": 0.625
+    },
+    "near_miss_error_rate": {},
+    "earned_capture_success_rate": null,
+    "mcp_recall_call_rate": {}
+  },
+  "by_condition": {
+    "baseline": {
+      "n_trials": 24,
+      "n_completed": 24,
+      "solve_rate": 0.125,
+      "mean_completeness": 0.7729,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 1.0,
+      "completed_rate": 1.0,
+      "median_turns": 12.0,
+      "median_cost_usd": 0.2839,
+      "median_cost_with_warmup_usd": 0.2839,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 28.5,
+      "memory_fired_rate": null,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    },
+    "hooks_only": {
+      "n_trials": 24,
+      "n_completed": 24,
+      "solve_rate": 0.625,
+      "mean_completeness": 0.9125,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 1.0,
+      "completed_rate": 1.0,
+      "median_turns": 13.0,
+      "median_cost_usd": 0.3603,
+      "median_cost_with_warmup_usd": 0.3603,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 81.5,
+      "memory_fired_rate": 1.0,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    }
+  },
+  "by_family": {
+    "memory_critical": {
+      "baseline": {
+        "n_trials": 24,
+        "n_completed": 24,
+        "solve_rate": 0.125,
+        "mean_completeness": 0.7729,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 12.0,
+        "median_cost_usd": 0.2839,
+        "median_cost_with_warmup_usd": 0.2839,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 28.5,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "hooks_only": {
+        "n_trials": 24,
+        "n_completed": 24,
+        "solve_rate": 0.625,
+        "mean_completeness": 0.9125,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 13.0,
+        "median_cost_usd": 0.3603,
+        "median_cost_with_warmup_usd": 0.3603,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 81.5,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    }
+  },
+  "lift_vs_baseline": {
+    "hooks_only_vs_baseline": {
+      "solve_rate": {
+        "delta": 0.5,
+        "ci95": [
+          0.125,
+          0.875
+        ]
+      },
+      "completeness": {
+        "delta": 0.1396,
+        "ci95": [
+          0.0417,
+          0.25
+        ]
+      },
+      "num_turns": {
+        "delta": 2.6667,
+        "ci95": [
+          0.5,
+          5.125
+        ]
+      },
+      "total_cost_usd": {
+        "delta": 0.0844,
+        "ci95": [
+          0.0126,
+          0.1632
+        ]
+      },
+      "tool_error_count": {
+        "delta": 0.0,
+        "ci95": [
+          -0.1667,
+          0.1667
+        ]
+      }
+    }
+  },
+  "mechanism_gated_uplift": {
+    "hooks_only": {
+      "delivery_failure_rate": 0.0,
+      "uplift_all_trials": {
+        "delta": 0.5,
+        "ci95": [
+          0.125,
+          0.875
+        ]
+      },
+      "uplift_fired_only": {
+        "delta": 0.5,
+        "ci95": [
+          0.125,
+          0.875
+        ]
+      }
+    }
+  },
+  "application_metrics": {
+    "applied_memory_rate": {
+      "baseline": null,
+      "hooks_only": 0.9125
+    },
+    "spurious_application_rate": {
+      "baseline": null,
+      "hooks_only": null
+    },
+    "citation_use_rate": {
+      "baseline": 1.0,
+      "hooks_only": 1.0
+    }
+  },
+  "per_family_ci": {
+    "memory_critical": {
+      "baseline": {
+        "solve_rate": 0.125,
+        "ci95": [
+          0.0,
+          0.25
+        ],
+        "n": 24
+      },
+      "hooks_only": {
+        "solve_rate": 0.625,
+        "ci95": [
+          0.4583,
+          0.8333
+        ],
+        "n": 24
+      }
+    }
+  },
+  "verdict": {
+    "memory_critical_uplift_positive": {
+      "result": "PASS",
+      "measured_delta": 0.5,
+      "ci95": [
+        0.125,
+        0.875
+      ],
+      "ci95_lower_bound": 0.125,
+      "threshold": "CI lower bound > 0.0",
+      "note": "computed on memory_critical family, fired trials only"
+    },
+    "guardrail_no_harm": {
+      "result": "n/a",
+      "reason": "guardrail family or hooks_only absent"
+    },
+    "distractor_robust": {
+      "result": "n/a",
+      "reason": "distractor family absent"
+    },
+    "efficiency_gain": {
+      "result": "n/a",
+      "reason": "memory_efficiency family or hooks_only absent"
+    }
+  }
+}

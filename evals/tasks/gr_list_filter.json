@@ -1,0 +1,47 @@
+{
+  "id": "gr_list_filter",
+  "name": "Add a status filter to GET /tasks (self-contained guardrail)",
+  "suite": "capability",
+  "family": "guardrail",
+  "difficulty": "easy",
+  "tags": ["query", "filter"],
+  "prompt": "Add an optional `status` query parameter to GET /tasks that filters the returned tasks by their status (one of todo, in_progress, done). When `status` is omitted, return all tasks as before. Keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/python_webapp_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/gr_list_filter"],
+  "memory_seed": [
+    {
+      "type": "fact",
+      "title": "Storage",
+      "summary": "Data is held in-process in app/db.py: USERS and TASKS dicts; there is no database. Tasks have id, title, status, owner_id, updated_at.",
+      "confidence": 0.9,
+      "status": "confirmed"
+    },
+    {
+      "type": "convention",
+      "title": "Endpoint style",
+      "summary": "Read endpoints return Pydantic models directly and use plain query parameters (see actor_id on PATCH /tasks/{id}).",
+      "confidence": 0.8,
+      "status": "confirmed"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "filter_applies",
+      "description": "Filtering by status returns only matching tasks",
+      "command": "python -m pytest -q tests/test_gr_list_filter.py::test_filter_by_status"
+    },
+    {
+      "id": "no_filter_all",
+      "description": "Omitting the filter returns all tasks",
+      "command": "python -m pytest -q tests/test_gr_list_filter.py::test_no_filter_returns_all"
+    }
+  ],
+  "timeout_seconds": 480,
+  "max_budget_usd": 1.0,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_gr_list_filter.py"],
+    "regression": ["python -m pytest -q tests/test_health.py tests/test_tasks_baseline.py"],
+    "static": ["ruff check app tests", "mypy app"]
+  }
+}

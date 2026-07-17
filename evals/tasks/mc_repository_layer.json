@@ -1,0 +1,53 @@
+{
+  "id": "mc_repository_layer",
+  "name": "Add an update-title endpoint, routing through the repository layer",
+  "suite": "capability",
+  "family": "memory_critical",
+  "difficulty": "hard",
+  "tags": ["decision", "architecture", "repository", "data-access"],
+  "prompt": "Add a PATCH /tasks/{task_id}/title endpoint that lets any non-viewer actor update a task's title. It takes an `actor_id` query parameter and a JSON body with a `title` field. An unknown task must produce a not-found error; a viewer actor must be rejected with 403. Return the updated task. Make minimal, maintainable changes that follow this project's established conventions, and keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/python_webapp_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/mc_repository_layer"],
+  "memory_seed": [
+    {
+      "type": "decision",
+      "title": "Repository layer for task data access",
+      "summary": "All task data access MUST go through a repository function in app/repo.py (e.g. repo.find_task, repo.save_task); endpoints must never touch db.TASKS directly. This was decided to keep endpoint logic decoupled from storage so the backing store can be swapped without touching route handlers.",
+      "confidence": 1.0,
+      "status": "confirmed"
+    }
+  ],
+  "warmup": [
+    "We have decided that all task data access must go through a repository layer in app/repo.py rather than letting endpoints touch db.TASKS directly. Create app/repo.py with at least find_task(task_id) and save_task(task) functions that delegate to app/db.py, then refactor the existing endpoints in app/main.py to use these repo functions instead of accessing db.TASKS directly. Briefly state the architectural decision you established and why it matters."
+  ],
+  "requirements": [
+    {
+      "id": "update_title_ok",
+      "description": "Updating a task title returns the updated task with the new title",
+      "command": "python -m pytest -q tests/test_mc_repository_layer.py::test_update_title_returns_updated_task"
+    },
+    {
+      "id": "update_title_unknown_404",
+      "description": "Updating an unknown task returns 404",
+      "command": "python -m pytest -q tests/test_mc_repository_layer.py::test_update_title_unknown_task_404"
+    },
+    {
+      "id": "update_title_persisted",
+      "description": "Updated title is visible in subsequent GET /tasks",
+      "command": "python -m pytest -q tests/test_mc_repository_layer.py::test_update_title_persisted"
+    },
+    {
+      "id": "repo_layer_enforced",
+      "description": "app/main.py uses the repo layer and does not access db.TASKS directly (memory-only knowledge)",
+      "command": "python -m pytest -q tests/test_mc_repository_layer.py::test_main_routes_through_repo_not_db_tasks"
+    }
+  ],
+  "timeout_seconds": 600,
+  "max_budget_usd": 1.5,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_mc_repository_layer.py"],
+    "regression": ["python -m pytest -q tests/test_health.py tests/test_tasks_baseline.py"],
+    "static": ["ruff check app tests", "mypy app"]
+  }
+}

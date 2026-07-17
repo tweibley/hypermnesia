@@ -1,0 +1,833 @@
+{
+  "n_trials": 66,
+  "conditions": [
+    "baseline",
+    "earned_hooks",
+    "hooks_only",
+    "mcp_only",
+    "oracle"
+  ],
+  "causal_metrics": {
+    "memory_fired_rate": {
+      "oracle": 1.0,
+      "mcp_only": 0.0,
+      "hooks_only": 1.0,
+      "earned_hooks": 1.0
+    },
+    "memory_applied_correctly_rate": {
+      "oracle": 1.0,
+      "hooks_only": 1.0,
+      "earned_hooks": 0.8333
+    },
+    "near_miss_error_rate": {},
+    "earned_capture_success_rate": 1.0,
+    "mcp_recall_call_rate": {
+      "mcp_only": 0.0
+    }
+  },
+  "by_condition": {
+    "oracle": {
+      "n_trials": 15,
+      "n_completed": 15,
+      "solve_rate": 1.0,
+      "mean_completeness": 1.0,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 0.8667,
+      "completed_rate": 1.0,
+      "median_turns": 9.0,
+      "median_cost_usd": 0.1564,
+      "median_cost_with_warmup_usd": 0.0,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 9.0,
+      "memory_fired_rate": 1.0,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    },
+    "mcp_only": {
+      "n_trials": 15,
+      "n_completed": 15,
+      "solve_rate": 0.6,
+      "mean_completeness": 0.91,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 1.0,
+      "completed_rate": 1.0,
+      "median_turns": 8.0,
+      "median_cost_usd": 0.1411,
+      "median_cost_with_warmup_usd": 0.0,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 7.0,
+      "memory_fired_rate": 0.0,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    },
+    "baseline": {
+      "n_trials": 15,
+      "n_completed": 15,
+      "solve_rate": 0.6,
+      "mean_completeness": 0.91,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 1.0,
+      "completed_rate": 1.0,
+      "median_turns": 9.0,
+      "median_cost_usd": 0.1478,
+      "median_cost_with_warmup_usd": 0.0,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 7.0,
+      "memory_fired_rate": null,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    },
+    "hooks_only": {
+      "n_trials": 15,
+      "n_completed": 15,
+      "solve_rate": 1.0,
+      "mean_completeness": 1.0,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 0.8,
+      "completed_rate": 1.0,
+      "median_turns": 8.0,
+      "median_cost_usd": 0.1347,
+      "median_cost_with_warmup_usd": 0.0,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 51.0,
+      "memory_fired_rate": 1.0,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    },
+    "earned_hooks": {
+      "n_trials": 6,
+      "n_completed": 6,
+      "solve_rate": 0.8333,
+      "mean_completeness": 0.9583,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 0.6667,
+      "completed_rate": 1.0,
+      "median_turns": 13.0,
+      "median_cost_usd": 0.2212,
+      "median_cost_with_warmup_usd": 0.0,
+      "median_tool_errors": 1.0,
+      "median_diff_added": 88.0,
+      "memory_fired_rate": 1.0,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    }
+  },
+  "by_family": {
+    "memory_critical": {
+      "oracle": {
+        "n_trials": 6,
+        "n_completed": 6,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 0.6667,
+        "completed_rate": 1.0,
+        "median_turns": 11.0,
+        "median_cost_usd": 0.2103,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.5,
+        "median_diff_added": 30.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "mcp_only": {
+        "n_trials": 6,
+        "n_completed": 6,
+        "solve_rate": 0.0,
+        "mean_completeness": 0.775,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 9.0,
+        "median_cost_usd": 0.161,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 20.5,
+        "memory_fired_rate": 0.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "baseline": {
+        "n_trials": 6,
+        "n_completed": 6,
+        "solve_rate": 0.0,
+        "mean_completeness": 0.775,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 9.5,
+        "median_cost_usd": 0.1613,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 17.0,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "hooks_only": {
+        "n_trials": 6,
+        "n_completed": 6,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 0.5,
+        "completed_rate": 1.0,
+        "median_turns": 10.5,
+        "median_cost_usd": 0.1989,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 75.5,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "earned_hooks": {
+        "n_trials": 6,
+        "n_completed": 6,
+        "solve_rate": 0.8333,
+        "mean_completeness": 0.9583,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 0.6667,
+        "completed_rate": 1.0,
+        "median_turns": 13.0,
+        "median_cost_usd": 0.2212,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 1.0,
+        "median_diff_added": 88.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    },
+    "memory_efficiency": {
+      "mcp_only": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 8.0,
+        "median_cost_usd": 0.136,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 3.0,
+        "memory_fired_rate": 0.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "baseline": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 8.0,
+        "median_cost_usd": 0.1374,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 3.0,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "hooks_only": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 8.0,
+        "median_cost_usd": 0.1312,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 51.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "oracle": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 8.0,
+        "median_cost_usd": 0.1353,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 4.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    },
+    "distractor": {
+      "baseline": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 8.0,
+        "median_cost_usd": 0.1275,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 5.0,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "mcp_only": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 8.0,
+        "median_cost_usd": 0.1263,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 5.0,
+        "memory_fired_rate": 0.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "hooks_only": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 7.0,
+        "median_cost_usd": 0.1142,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 49.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "oracle": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 7.0,
+        "median_cost_usd": 0.1262,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 5.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    },
+    "guardrail": {
+      "hooks_only": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 8.0,
+        "median_cost_usd": 0.1347,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 50.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "oracle": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 9.0,
+        "median_cost_usd": 0.1564,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 9.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "mcp_only": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 9.0,
+        "median_cost_usd": 0.1522,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 7.0,
+        "memory_fired_rate": 0.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "baseline": {
+        "n_trials": 3,
+        "n_completed": 3,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 9.0,
+        "median_cost_usd": 0.1542,
+        "median_cost_with_warmup_usd": 0.0,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 7.0,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    }
+  },
+  "lift_vs_baseline": {
+    "earned_hooks_vs_baseline": {
+      "solve_rate": {
+        "delta": 0.8333,
+        "ci95": [
+          0.5,
+          1.0
+        ]
+      },
+      "completeness": {
+        "delta": 0.1833,
+        "ci95": [
+          0.1,
+          0.25
+        ]
+      },
+      "num_turns": {
+        "delta": 2.8333,
+        "ci95": [
+          -1.6667,
+          5.8333
+        ]
+      },
+      "total_cost_usd": {
+        "delta": 0.052,
+        "ci95": [
+          -0.0553,
+          0.1354
+        ]
+      },
+      "tool_error_count": {
+        "delta": 0.8333,
+        "ci95": [
+          0.1667,
+          1.8333
+        ]
+      }
+    },
+    "hooks_only_vs_baseline": {
+      "solve_rate": {
+        "delta": 0.4,
+        "ci95": [
+          0.0,
+          0.8
+        ]
+      },
+      "completeness": {
+        "delta": 0.09,
+        "ci95": [
+          0.0,
+          0.19
+        ]
+      },
+      "num_turns": {
+        "delta": -0.2,
+        "ci95": [
+          -1.2667,
+          1.2667
+        ]
+      },
+      "total_cost_usd": {
+        "delta": -0.0055,
+        "ci95": [
+          -0.0336,
+          0.0269
+        ]
+      },
+      "tool_error_count": {
+        "delta": -0.1333,
+        "ci95": [
+          -0.4,
+          0.0
+        ]
+      }
+    },
+    "mcp_only_vs_baseline": {
+      "solve_rate": {
+        "delta": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "completeness": {
+        "delta": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "num_turns": {
+        "delta": -0.5333,
+        "ci95": [
+          -1.6,
+          0.1333
+        ]
+      },
+      "total_cost_usd": {
+        "delta": -0.0092,
+        "ci95": [
+          -0.0297,
+          0.0056
+        ]
+      },
+      "tool_error_count": {
+        "delta": -0.0667,
+        "ci95": [
+          -0.2667,
+          0.0667
+        ]
+      }
+    },
+    "oracle_vs_baseline": {
+      "solve_rate": {
+        "delta": 0.4,
+        "ci95": [
+          0.0,
+          0.8
+        ]
+      },
+      "completeness": {
+        "delta": 0.09,
+        "ci95": [
+          0.0,
+          0.19
+        ]
+      },
+      "num_turns": {
+        "delta": 0.1333,
+        "ci95": [
+          -1.2,
+          2.0667
+        ]
+      },
+      "total_cost_usd": {
+        "delta": 0.0041,
+        "ci95": [
+          -0.0247,
+          0.0388
+        ]
+      },
+      "tool_error_count": {
+        "delta": 0.1333,
+        "ci95": [
+          -0.4,
+          0.7333
+        ]
+      }
+    }
+  },
+  "mechanism_gated_uplift": {
+    "earned_hooks": {
+      "delivery_failure_rate": 0.0,
+      "uplift_all_trials": {
+        "delta": 0.8333,
+        "ci95": [
+          0.5,
+          1.0
+        ]
+      },
+      "uplift_fired_only": {
+        "delta": 0.8333,
+        "ci95": [
+          0.5,
+          1.0
+        ]
+      }
+    },
+    "hooks_only": {
+      "delivery_failure_rate": 0.0,
+      "uplift_all_trials": {
+        "delta": 0.4,
+        "ci95": [
+          0.0,
+          0.8
+        ]
+      },
+      "uplift_fired_only": {
+        "delta": 0.4,
+        "ci95": [
+          0.0,
+          0.8
+        ]
+      }
+    },
+    "mcp_only": {
+      "delivery_failure_rate": 1.0,
+      "uplift_all_trials": {
+        "delta": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "uplift_fired_only": null
+    },
+    "oracle": {
+      "delivery_failure_rate": 0.0,
+      "uplift_all_trials": {
+        "delta": 0.4,
+        "ci95": [
+          0.0,
+          0.8
+        ]
+      },
+      "uplift_fired_only": {
+        "delta": 0.4,
+        "ci95": [
+          0.0,
+          0.8
+        ]
+      }
+    }
+  },
+  "application_metrics": {
+    "applied_memory_rate": {
+      "baseline": null,
+      "earned_hooks": 0.9583,
+      "hooks_only": 1.0,
+      "mcp_only": null,
+      "oracle": 1.0
+    },
+    "spurious_application_rate": {
+      "baseline": 0.0,
+      "earned_hooks": null,
+      "hooks_only": 0.0,
+      "mcp_only": 0.0,
+      "oracle": 0.0
+    },
+    "citation_use_rate": {
+      "baseline": 1.0,
+      "earned_hooks": 1.0,
+      "hooks_only": 1.0,
+      "mcp_only": 1.0,
+      "oracle": 1.0
+    }
+  },
+  "per_family_ci": {
+    "memory_critical": {
+      "baseline": {
+        "solve_rate": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "n": 6
+      },
+      "earned_hooks": {
+        "solve_rate": 0.8333,
+        "ci95": [
+          0.5,
+          1.0
+        ],
+        "n": 6
+      },
+      "hooks_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 6
+      },
+      "mcp_only": {
+        "solve_rate": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "n": 6
+      },
+      "oracle": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 6
+      }
+    },
+    "memory_efficiency": {
+      "baseline": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "earned_hooks": null,
+      "hooks_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "mcp_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "oracle": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      }
+    },
+    "distractor": {
+      "baseline": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "earned_hooks": null,
+      "hooks_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "mcp_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "oracle": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      }
+    },
+    "guardrail": {
+      "baseline": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "earned_hooks": null,
+      "hooks_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "mcp_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      },
+      "oracle": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 3
+      }
+    }
+  },
+  "verdict": {
+    "memory_critical_uplift_positive": {
+      "result": "PASS",
+      "measured_delta": 1.0,
+      "ci95": [
+        1.0,
+        1.0
+      ],
+      "ci95_lower_bound": 1.0,
+      "threshold": "CI lower bound > 0.0",
+      "note": "computed on memory_critical family, fired trials only"
+    },
+    "guardrail_no_harm": {
+      "result": "PASS",
+      "measured_delta": 0.0,
+      "ci95_lower_bound": 0.0,
+      "threshold": "CI lower bound of delta > -0.05 (no significant regression)",
+      "interpretation": "negative delta means memory HURT guardrail solve rate; we fail only on a significant regression, not on improvement"
+    },
+    "distractor_robust": {
+      "result": "PASS",
+      "hooks_only_failure_rate": 0.0,
+      "baseline_failure_rate": 0.0,
+      "threshold": "hooks_only <= baseline + 0.05 = 0.05"
+    },
+    "efficiency_gain": {
+      "result": "PASS",
+      "solve_delta": 0.0,
+      "turns_delta": -0.3333,
+      "cost_delta_usd": -0.0104,
+      "threshold": "solve_delta >= 0.0 AND (turns_delta <= 0.0 OR cost_delta <= 0.0)"
+    }
+  }
+}

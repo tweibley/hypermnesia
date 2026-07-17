@@ -1,0 +1,40 @@
+{
+  "id": "adv_nearmiss_auth",
+  "name": "Add GET /stats (adversarial: over-broad auth convention in memory)",
+  "suite": "capability",
+  "family": "distractor",
+  "difficulty": "easy",
+  "tags": ["adversarial", "near_miss"],
+  "prompt": "Add a GET /stats endpoint that returns a plain JSON object with two keys: task_count (the number of tasks currently stored) and user_count (the number of users currently stored). Keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/python_webapp_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/adv_nearmiss_auth"],
+  "memory_seed": [
+    {
+      "type": "convention",
+      "title": "Caller identity required on every endpoint",
+      "summary": "Every endpoint — reads and writes alike — requires an actor_id query parameter and must validate the caller's role before responding. Endpoints without actor_id must return 403.",
+      "confidence": 1.0,
+      "status": "confirmed"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "stats_no_auth",
+      "description": "GET /stats with no actor_id returns 200 with task_count and user_count",
+      "command": "python -m pytest -q tests/test_adv_nearmiss_auth.py::test_stats_no_actor_id"
+    },
+    {
+      "id": "stats_counts",
+      "description": "Returned counts match the actual number of tasks and users in the seed",
+      "command": "python -m pytest -q tests/test_adv_nearmiss_auth.py::test_stats_correct_counts"
+    }
+  ],
+  "timeout_seconds": 480,
+  "max_budget_usd": 1.0,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_adv_nearmiss_auth.py"],
+    "regression": ["python -m pytest -q tests/test_health.py tests/test_tasks_baseline.py"],
+    "static": ["ruff check app tests", "mypy app"]
+  }
+}

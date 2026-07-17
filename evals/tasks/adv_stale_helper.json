@@ -1,0 +1,40 @@
+{
+  "id": "adv_stale_helper",
+  "name": "Add GET /tasks/{task_id} (adversarial: wrong helper name in memory)",
+  "suite": "capability",
+  "family": "distractor",
+  "difficulty": "easy",
+  "tags": ["adversarial", "stale"],
+  "prompt": "Add a GET /tasks/{task_id} endpoint that returns the task with that id, or a 404 error if it does not exist. Keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/python_webapp_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/adv_stale_helper"],
+  "memory_seed": [
+    {
+      "type": "convention",
+      "title": "Task lookup helper",
+      "summary": "Always look up a task by id via db.fetch_task(task_id); it returns the Task or None if not found.",
+      "confidence": 1.0,
+      "status": "confirmed"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "existing_task_200",
+      "description": "GET /tasks/1 returns 200 with the task object",
+      "command": "python -m pytest -q tests/test_adv_stale_helper.py::test_get_existing_task"
+    },
+    {
+      "id": "missing_task_404",
+      "description": "GET /tasks/99999 returns 404",
+      "command": "python -m pytest -q tests/test_adv_stale_helper.py::test_get_missing_task"
+    }
+  ],
+  "timeout_seconds": 480,
+  "max_budget_usd": 1.0,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_adv_stale_helper.py"],
+    "regression": ["python -m pytest -q tests/test_health.py tests/test_tasks_baseline.py"],
+    "static": ["ruff check app tests", "mypy app"]
+  }
+}

@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+
+# Swift / SwiftPM
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+# Package.resolved IS committed (reproducible dependency versions)
+
+# Built app bundle + release artifacts
+*.app/
+dist/
+
+# Local runtime data (the memory store should never be committed)
+*.db
+*.db-wal
+*.db-shm
+/.hypermnesia/
+
+# Secrets
+.env
+*.p8
+
+# Eval harness runtime
+evals/runs/
+evals/runs_*/
+evals/runs_*.log
+.venv*/
+__pycache__/
+*.pyc
+
+# Tool caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Agent-client local state (Claude Code, Cursor, Antigravity)
+.claude/
+.cursor/
+.antigravitycli/

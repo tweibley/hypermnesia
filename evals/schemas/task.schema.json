@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hypermnesia.local/evals/task.schema.json",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "suite",
+    "family",
+    "prompt",
+    "seed_scenario",
+    "timeout_seconds",
+    "max_budget_usd",
+    "graders"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9_\\-]+$" },
+    "name": { "type": "string", "minLength": 3 },
+    "suite": { "type": "string", "enum": ["capability", "regression"] },
+    "family": {
+      "type": "string",
+      "enum": ["memory_critical", "memory_efficiency", "guardrail", "distractor"]
+    },
+    "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "prompt": { "type": "string", "minLength": 20 },
+    "seed_scenario": { "type": "string" },
+    "overlays": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Agent-visible files copied into the workspace BEFORE the run."
+    },
+    "grader_overlays": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Held-out files (e.g. acceptance tests) copied in AFTER the run, before grading. For memory_critical tasks the acceptance test lives here so the hidden requirement is NOT leaked to the agent."
+    },
+    "memory_seed": {
+      "type": "array",
+      "description": "Memories loaded into the isolated store for memory/oracle conditions.",
+      "items": {
+        "type": "object",
+        "required": ["type", "title", "summary"],
+        "properties": {
+          "type": { "type": "string", "enum": ["decision", "convention", "intent", "fact", "concern", "backlog"] },
+          "title": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "status": { "type": "string", "enum": ["draft", "confirmed"] },
+          "appliesWhen": { "type": "string", "description": "Convention/concern scope: where the rule applies." },
+          "excludesWhen": { "type": "string", "description": "Convention/concern scope: adjacent cases the rule must NOT be applied to." },
+          "belief": { "type": "number", "minimum": 0, "maximum": 1, "description": "Belief-model evidence prior; when set, confidence is computed as belief × freshness × outcomes." },
+          "timesSighted": { "type": "integer", "minimum": 0 },
+          "timesAppliedSuccess": { "type": "integer", "minimum": 0 },
+          "timesOverridden": { "type": "integer", "minimum": 0 },
+          "ageDays": { "type": "integer", "minimum": 0, "description": "Days since validation (freshness anchor)." }
+        },
+        "additionalProperties": false
+      }
+    },
+    "warmup": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Warmup prompts for the earned_hooks condition. Each runs as its own coding session; the transcripts are replayed into memory via the classifier before the measured task."
+    },
+    "requirements": {
+      "type": "array",
+      "description": "Independently-checkable sub-requirements for partial-credit completeness scoring.",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "command"],
+        "properties": {
+          "id": { "type": "string" },
+          "description": { "type": "string" },
+          "command": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "timeout_seconds": { "type": "integer", "minimum": 60 },
+    "max_budget_usd": { "type": "number", "minimum": 0.05 },
+    "graders": {
+      "type": "object",
+      "required": ["outcome", "regression", "static"],
+      "properties": {
+        "outcome": { "type": "array", "items": { "type": "string" } },
+        "regression": { "type": "array", "items": { "type": "string" } },
+        "static": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "additionalProperties": false
+}

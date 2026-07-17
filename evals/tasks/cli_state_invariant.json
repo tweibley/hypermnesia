@@ -1,0 +1,47 @@
+{
+  "id": "cli_state_invariant",
+  "name": "Make ledger list robust to a corrupted or missing data file",
+  "suite": "capability",
+  "family": "guardrail",
+  "difficulty": "medium",
+  "tags": ["invariant", "error-handling", "robustness", "cli"],
+  "prompt": "Make the ledger CLI robust so that `list` (and any other read command) exits 0 with no output when the data file is missing or unparseable (corrupt / partial / empty), instead of crashing. Make minimal, maintainable changes that follow this project's established conventions, and keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/cli_ledger_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/cli_state_invariant"],
+  "memory_seed": [],
+  "requirements": [
+    {
+      "id": "list_garbage_exits_zero",
+      "description": "list on a garbage (non-JSON) data file exits 0",
+      "command": "python -m pytest -q tests/test_cli_state_invariant.py::test_list_on_garbage_file_exits_zero"
+    },
+    {
+      "id": "list_garbage_empty_output",
+      "description": "list on a corrupt data file produces empty output (treat as empty store)",
+      "command": "python -m pytest -q tests/test_cli_state_invariant.py::test_list_on_garbage_file_produces_empty_output"
+    },
+    {
+      "id": "list_partial_json_exits_zero",
+      "description": "list on a truncated/partial JSON file exits 0",
+      "command": "python -m pytest -q tests/test_cli_state_invariant.py::test_list_on_partial_json_exits_zero"
+    },
+    {
+      "id": "list_empty_file_exits_zero",
+      "description": "list on a zero-byte data file exits 0",
+      "command": "python -m pytest -q tests/test_cli_state_invariant.py::test_list_on_empty_file_exits_zero"
+    },
+    {
+      "id": "happy_path_still_works",
+      "description": "add then list still works correctly after the fix",
+      "command": "python -m pytest -q tests/test_cli_state_invariant.py::test_add_then_list_still_works_after_fix"
+    }
+  ],
+  "timeout_seconds": 300,
+  "max_budget_usd": 1.0,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_cli_state_invariant.py"],
+    "regression": ["python -m pytest -q tests/test_ledger_baseline.py"],
+    "static": ["ruff check ledger tests", "mypy ledger"]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "id": "cli_exit_contract",
+  "name": "Add ledger get <id> subcommand following the project exit-code/stream contract",
+  "suite": "capability",
+  "family": "memory_critical",
+  "difficulty": "medium",
+  "tags": ["convention", "exit-codes", "cli"],
+  "prompt": "Add a `get <id>` subcommand to the ledger CLI that prints the matching entry as a JSON line to stdout, or fails if the id is unknown. Make minimal, maintainable changes that follow this project's established conventions, and keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/cli_ledger_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/cli_exit_contract"],
+  "memory_seed": [
+    {
+      "type": "convention",
+      "title": "Exit-code and stream contract",
+      "summary": "Commands that fail on bad user input MUST exit code 2 and write a one-line error to STDERR (never stdout); internal errors exit 1; success exits 0; data output always goes to stdout as JSON Lines.",
+      "confidence": 1.0,
+      "status": "confirmed"
+    }
+  ],
+  "warmup": [
+    "We have decided on a strict exit-code and stream contract for this CLI: commands that fail due to bad user input (unknown id, invalid argument, etc.) MUST exit with code 2 and write a one-line error message to STDERR only (never stdout); internal/unexpected errors exit 1; success exits 0; all data output goes to stdout as JSON Lines. Update the existing `add` and `list` subcommands to follow this contract (check that list exits 0, add exits 0 on success), and document this convention in a brief comment in cli.py. Briefly state the convention you established."
+  ],
+  "requirements": [
+    {
+      "id": "get_valid",
+      "description": "get with a valid id exits 0 and prints a JSON line to stdout",
+      "command": "python -m pytest -q tests/test_cli_exit_contract.py::test_get_valid_exits_zero"
+    },
+    {
+      "id": "get_missing_exit_code",
+      "description": "get with an unknown id exits with code 2 (memory-only knowledge: not 1)",
+      "command": "python -m pytest -q tests/test_cli_exit_contract.py::test_get_missing_exits_two"
+    },
+    {
+      "id": "get_missing_stderr",
+      "description": "get with an unknown id writes to stderr (not stdout)",
+      "command": "python -m pytest -q tests/test_cli_exit_contract.py::test_get_missing_error_on_stderr"
+    }
+  ],
+  "timeout_seconds": 300,
+  "max_budget_usd": 1.0,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_cli_exit_contract.py"],
+    "regression": ["python -m pytest -q tests/test_ledger_baseline.py"],
+    "static": ["ruff check ledger tests", "mypy ledger"]
+  }
+}

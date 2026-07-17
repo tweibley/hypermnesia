@@ -1,0 +1,72 @@
+{
+  "id": "mc_audit_log",
+  "name": "Add task reassignment, maintaining the compliance audit trail",
+  "suite": "capability",
+  "family": "memory_critical",
+  "difficulty": "hard",
+  "tags": ["decision", "audit", "compliance"],
+  "prompt": "Add a PATCH /tasks/{task_id}/reassign endpoint that lets an admin change a task's owner to another existing user. It takes `actor_id` and `new_owner_id` query parameters. Non-admin actors must be rejected; an unknown task or unknown new owner must produce a not-found error. Return the updated task. Make minimal, maintainable changes that follow this project's established conventions, and keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/python_webapp_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/mc_audit_log"],
+  "memory_seed": [
+    {
+      "type": "decision",
+      "title": "Compliance audit trail",
+      "summary": "Chose to maintain an in-process audit trail for compliance: app/db.py must expose EVENT_LOG (a list) and a helper log_event(actor_id, action, task_id) that appends a dict {\"actor_id\", \"action\", \"task_id\"} to EVENT_LOG. EVERY task mutation (create, update/patch, delete, reassign) MUST call log_event with a descriptive action string. This is a hard compliance requirement, not optional.",
+      "confidence": 1.0,
+      "status": "confirmed"
+    },
+    {
+      "type": "fact",
+      "title": "Roles",
+      "summary": "Users have roles admin, member, viewer. Only admin may reassign task ownership.",
+      "confidence": 0.9,
+      "status": "confirmed"
+    },
+    {
+      "type": "convention",
+      "title": "Unknown users",
+      "summary": "Look up users via db.USERS; an unknown user id is a not-found (404) condition.",
+      "confidence": 0.85,
+      "status": "confirmed"
+    }
+  ],
+  "warmup": [
+    "We have decided to maintain an in-process compliance audit trail. Add EVENT_LOG (a list) and a helper log_event(actor_id, action, task_id) to app/db.py that appends {\"actor_id\", \"action\", \"task_id\"} to EVENT_LOG. Then call log_event from every existing task mutation in app/main.py (create_task and patch_task) with a descriptive action string. Briefly state the compliance decision you established and why every mutation must be logged."
+  ],
+  "requirements": [
+    {
+      "id": "reassign_admin",
+      "description": "Admin can reassign ownership to another user",
+      "command": "python -m pytest -q tests/test_mc_audit_log.py::test_admin_can_reassign"
+    },
+    {
+      "id": "reassign_forbidden",
+      "description": "Non-admin is rejected with 403",
+      "command": "python -m pytest -q tests/test_mc_audit_log.py::test_non_admin_forbidden"
+    },
+    {
+      "id": "reassign_unknown_owner",
+      "description": "Reassigning to an unknown user returns 404",
+      "command": "python -m pytest -q tests/test_mc_audit_log.py::test_unknown_owner_404"
+    },
+    {
+      "id": "reassign_unknown_task",
+      "description": "Reassigning an unknown task returns 404",
+      "command": "python -m pytest -q tests/test_mc_audit_log.py::test_unknown_task_404"
+    },
+    {
+      "id": "audit_event_written",
+      "description": "Reassignment appends a compliance audit event (memory-only knowledge)",
+      "command": "python -m pytest -q tests/test_mc_audit_log.py::test_reassign_writes_audit_event"
+    }
+  ],
+  "timeout_seconds": 600,
+  "max_budget_usd": 1.5,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_mc_audit_log.py"],
+    "regression": ["python -m pytest -q tests/test_health.py tests/test_tasks_baseline.py"],
+    "static": ["ruff check app tests", "mypy app"]
+  }
+}

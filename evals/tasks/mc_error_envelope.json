@@ -1,0 +1,67 @@
+{
+  "id": "mc_error_envelope",
+  "name": "Add DELETE /tasks/{id} following the project error-envelope convention",
+  "suite": "capability",
+  "family": "memory_critical",
+  "difficulty": "medium",
+  "tags": ["convention", "errors", "api"],
+  "prompt": "Add a DELETE /tasks/{task_id} endpoint to this FastAPI app. Only admins may delete a task; deleting a task that does not exist must return a not-found error; a non-admin actor must be rejected. On success return the deleted task. Take an `actor_id` query parameter like the other endpoints. Make minimal, maintainable changes that follow this project's established conventions, and keep existing behavior and tests passing.",
+  "seed_scenario": "evals/scenarios/python_webapp_seed",
+  "overlays": [],
+  "grader_overlays": ["evals/grader_overlays/mc_error_envelope"],
+  "memory_seed": [
+    {
+      "type": "convention",
+      "title": "HTTP error envelope",
+      "summary": "All HTTP error responses MUST use the JSON envelope {\"error\": {\"code\": <stable machine code string>, \"message\": <human-readable text>}} with the matching HTTP status. Implement client errors via the shared helper error_response(status, code, message) in app/errors.py (returns a fastapi.responses.JSONResponse). Do NOT raise bare HTTPException for client errors, because that produces FastAPI's default {\"detail\": ...} shape which clients do not parse.",
+      "confidence": 1.0,
+      "status": "confirmed"
+    },
+    {
+      "type": "convention",
+      "title": "Error codes",
+      "summary": "Use the stable machine codes 'not_found' for missing resources and 'forbidden' for authorization failures in the error envelope's code field.",
+      "confidence": 0.95,
+      "status": "confirmed"
+    },
+    {
+      "type": "fact",
+      "title": "Roles",
+      "summary": "Users have one of three roles: admin, member, viewer. Admin is the only role permitted to perform destructive operations.",
+      "confidence": 0.9,
+      "status": "confirmed"
+    }
+  ],
+  "warmup": [
+    "We have decided that ALL HTTP error responses in this API must use a shared envelope {\"error\": {\"code\": <stable machine code string>, \"message\": <human-readable text>}}, instead of FastAPI's default {\"detail\": ...}. Implement a helper error_response(status, code, message) in app/errors.py that returns a fastapi.responses.JSONResponse, and refactor the existing client errors in app/main.py (the 404 and 403 in patch_task, the 422 in create_task) to use it. Use lowercase snake_case codes like 'not_found' and 'forbidden'. Briefly state the convention you established."
+  ],
+  "requirements": [
+    {
+      "id": "delete_admin",
+      "description": "Admin can delete an existing task and gets the task back",
+      "command": "python -m pytest -q tests/test_mc_error_envelope.py::test_admin_can_delete"
+    },
+    {
+      "id": "delete_forbidden",
+      "description": "Non-admin is rejected with 403",
+      "command": "python -m pytest -q tests/test_mc_error_envelope.py::test_non_admin_rejected"
+    },
+    {
+      "id": "delete_missing",
+      "description": "Deleting a missing task returns 404",
+      "command": "python -m pytest -q tests/test_mc_error_envelope.py::test_missing_task_not_found"
+    },
+    {
+      "id": "error_envelope",
+      "description": "Error body uses the project envelope {error:{code,message}} (memory-only knowledge)",
+      "command": "python -m pytest -q tests/test_mc_error_envelope.py::test_error_uses_envelope"
+    }
+  ],
+  "timeout_seconds": 600,
+  "max_budget_usd": 1.5,
+  "graders": {
+    "outcome": ["python -m pytest -q tests/test_mc_error_envelope.py"],
+    "regression": ["python -m pytest -q tests/test_health.py tests/test_tasks_baseline.py"],
+    "static": ["ruff check app tests", "mypy app"]
+  }
+}

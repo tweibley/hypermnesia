@@ -1,0 +1,325 @@
+{
+  "n_trials": 40,
+  "conditions": [
+    "baseline",
+    "hooks_only"
+  ],
+  "causal_metrics": {
+    "memory_fired_rate": {
+      "hooks_only": 0.9
+    },
+    "memory_applied_correctly_rate": {
+      "hooks_only": 1.0
+    },
+    "near_miss_error_rate": {
+      "baseline": 0.25,
+      "hooks_only": 1.0
+    },
+    "earned_capture_success_rate": null,
+    "mcp_recall_call_rate": {}
+  },
+  "by_condition": {
+    "baseline": {
+      "n_trials": 20,
+      "n_completed": 20,
+      "solve_rate": 0.75,
+      "mean_completeness": 0.85,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 0.95,
+      "completed_rate": 1.0,
+      "median_turns": 9.0,
+      "median_cost_usd": 0.1825,
+      "median_cost_with_warmup_usd": 0.1825,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 11.5,
+      "memory_fired_rate": null,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    },
+    "hooks_only": {
+      "n_trials": 20,
+      "n_completed": 20,
+      "solve_rate": 0.8,
+      "mean_completeness": 0.8,
+      "regression_safe_rate": 1.0,
+      "static_clean_rate": 0.9,
+      "completed_rate": 1.0,
+      "median_turns": 9.0,
+      "median_cost_usd": 0.1966,
+      "median_cost_with_warmup_usd": 0.1966,
+      "median_tool_errors": 0.0,
+      "median_diff_added": 56.0,
+      "memory_fired_rate": 0.9,
+      "recall_rate": 0.0,
+      "recall_before_first_edit_rate": 0.0
+    }
+  },
+  "by_family": {
+    "distractor": {
+      "baseline": {
+        "n_trials": 12,
+        "n_completed": 12,
+        "solve_rate": 0.9167,
+        "mean_completeness": 0.9167,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 9.0,
+        "median_cost_usd": 0.1739,
+        "median_cost_with_warmup_usd": 0.1739,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 7.5,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "hooks_only": {
+        "n_trials": 12,
+        "n_completed": 12,
+        "solve_rate": 0.6667,
+        "mean_completeness": 0.6667,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 9.0,
+        "median_cost_usd": 0.1933,
+        "median_cost_with_warmup_usd": 0.1933,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 55.5,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    },
+    "memory_critical": {
+      "baseline": {
+        "n_trials": 6,
+        "n_completed": 6,
+        "solve_rate": 0.3333,
+        "mean_completeness": 0.6667,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 0.8333,
+        "completed_rate": 1.0,
+        "median_turns": 10.5,
+        "median_cost_usd": 0.2319,
+        "median_cost_with_warmup_usd": 0.2319,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 25.5,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "hooks_only": {
+        "n_trials": 6,
+        "n_completed": 6,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 0.6667,
+        "completed_rate": 1.0,
+        "median_turns": 9.5,
+        "median_cost_usd": 0.2152,
+        "median_cost_with_warmup_usd": 0.2152,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 70.0,
+        "memory_fired_rate": 1.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    },
+    "guardrail": {
+      "hooks_only": {
+        "n_trials": 2,
+        "n_completed": 2,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 7.0,
+        "median_cost_usd": 0.1569,
+        "median_cost_with_warmup_usd": 0.1569,
+        "median_tool_errors": 0.0,
+        "median_diff_added": 72.0,
+        "memory_fired_rate": 0.0,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      },
+      "baseline": {
+        "n_trials": 2,
+        "n_completed": 2,
+        "solve_rate": 1.0,
+        "mean_completeness": 1.0,
+        "regression_safe_rate": 1.0,
+        "static_clean_rate": 1.0,
+        "completed_rate": 1.0,
+        "median_turns": 9.5,
+        "median_cost_usd": 0.1809,
+        "median_cost_with_warmup_usd": 0.1809,
+        "median_tool_errors": 0.5,
+        "median_diff_added": 12.0,
+        "memory_fired_rate": null,
+        "recall_rate": 0.0,
+        "recall_before_first_edit_rate": 0.0
+      }
+    }
+  },
+  "lift_vs_baseline": {
+    "hooks_only_vs_baseline": {
+      "solve_rate": {
+        "delta": 0.05,
+        "ci95": [
+          -0.3,
+          0.4
+        ]
+      },
+      "completeness": {
+        "delta": -0.05,
+        "ci95": [
+          -0.3333,
+          0.2
+        ]
+      },
+      "num_turns": {
+        "delta": 0.35,
+        "ci95": [
+          -0.85,
+          1.4
+        ]
+      },
+      "total_cost_usd": {
+        "delta": 0.012,
+        "ci95": [
+          -0.007,
+          0.0303
+        ]
+      },
+      "tool_error_count": {
+        "delta": -0.1,
+        "ci95": [
+          -0.4,
+          0.2
+        ]
+      }
+    }
+  },
+  "mechanism_gated_uplift": {
+    "hooks_only": {
+      "delivery_failure_rate": 0.1,
+      "uplift_all_trials": {
+        "delta": 0.05,
+        "ci95": [
+          -0.3,
+          0.4
+        ]
+      },
+      "uplift_fired_only": {
+        "delta": 0.0556,
+        "ci95": [
+          -0.3333,
+          0.4444
+        ]
+      }
+    }
+  },
+  "application_metrics": {
+    "applied_memory_rate": {
+      "baseline": null,
+      "hooks_only": 1.0
+    },
+    "spurious_application_rate": {
+      "baseline": 0.0714,
+      "hooks_only": 0.2857
+    },
+    "citation_use_rate": {
+      "baseline": 1.0,
+      "hooks_only": 1.0
+    }
+  },
+  "per_family_ci": {
+    "distractor": {
+      "baseline": {
+        "solve_rate": 0.9167,
+        "ci95": [
+          0.75,
+          1.0
+        ],
+        "n": 12
+      },
+      "hooks_only": {
+        "solve_rate": 0.6667,
+        "ci95": [
+          0.4167,
+          0.9167
+        ],
+        "n": 12
+      }
+    },
+    "memory_critical": {
+      "baseline": {
+        "solve_rate": 0.3333,
+        "ci95": [
+          0.0,
+          0.6667
+        ],
+        "n": 6
+      },
+      "hooks_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 6
+      }
+    },
+    "guardrail": {
+      "baseline": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 2
+      },
+      "hooks_only": {
+        "solve_rate": 1.0,
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "n": 2
+      }
+    }
+  },
+  "verdict": {
+    "memory_critical_uplift_positive": {
+      "result": "FAIL",
+      "measured_delta": 0.6667,
+      "ci95": [
+        0.0,
+        1.0
+      ],
+      "ci95_lower_bound": 0.0,
+      "threshold": "CI lower bound > 0.0",
+      "note": "computed on memory_critical family, fired trials only"
+    },
+    "guardrail_no_harm": {
+      "result": "PASS",
+      "measured_delta": 0.0,
+      "ci95_lower_bound": 0.0,
+      "threshold": "CI lower bound of delta > -0.05 (no significant regression)",
+      "interpretation": "negative delta means memory HURT guardrail solve rate; we fail only on a significant regression, not on improvement"
+    },
+    "distractor_robust": {
+      "result": "FAIL",
+      "hooks_only_failure_rate": 0.3333,
+      "baseline_failure_rate": 0.0833,
+      "threshold": "hooks_only <= baseline + 0.05 = 0.1333"
+    },
+    "efficiency_gain": {
+      "result": "n/a",
+      "reason": "memory_efficiency family or hooks_only absent"
+    }
+  }
+}

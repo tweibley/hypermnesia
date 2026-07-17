@@ -1,0 +1,13 @@
+{
+  // Static site for hypermnesia.app, served via Cloudflare Workers static assets.
+  // Deploy: `wrangler deploy` from this directory (after `wrangler login`).
+  "name": "hypermnesia-site",
+  "compatibility_date": "2026-07-17",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    { "pattern": "hypermnesia.app", "custom_domain": true },
+    { "pattern": "www.hypermnesia.app", "custom_domain": true }
+  ]
+}
