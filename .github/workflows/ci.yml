@@ -17,7 +17,7 @@ jobs:
     # job limit is 6 hours — a single hung test run can consume the entire free tier.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Select Xcode (pin to 26.1.x — the Swift 6.2 series)
         # The suite is developed and verified on Swift 6.2. Newer Xcodes on the image (26.6 →
         # Swift 6.3.3) ship a swift-testing whose in-process concurrent runner wedges this suite
