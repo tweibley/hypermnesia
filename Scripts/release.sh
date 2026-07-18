@@ -111,15 +111,20 @@ cp "$ZIP" "$DIST/Hypermnesia.zip"
 # locally, run Sparkle's generate_keys once and sign_update falls back to your Keychain).
 # Published as a release asset so releases/latest/download/appcast.xml is a stable feed URL.
 SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+SIG_ATTRS=""
 if [ -n "$SPARKLE_PUBLIC_KEY" ] && [ -x "$SIGN_UPDATE" ]; then
   if [ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]; then
     KEYFILE="$(mktemp)"
     printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$KEYFILE"
-    SIG_ATTRS="$("$SIGN_UPDATE" --ed-key-file "$KEYFILE" "$ZIP")"
+    SIG_ATTRS="$("$SIGN_UPDATE" --ed-key-file "$KEYFILE" "$ZIP")" || SIG_ATTRS=""
     rm -f "$KEYFILE"
   else
-    SIG_ATTRS="$("$SIGN_UPDATE" "$ZIP")"
+    SIG_ATTRS="$("$SIGN_UPDATE" "$ZIP")" || SIG_ATTRS=""   # local: falls back to your Keychain key
   fi
+fi
+# Fail-soft: a release without an appcast is still a good release (update checks just
+# won't see it) — don't let a missing/failed signing key sink the whole pipeline.
+if [ -n "$SIG_ATTRS" ]; then
   cat > "$DIST/appcast.xml" <<APPCAST
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.sparkle-project.org/xml/1.0/modules/sparkle">
@@ -140,7 +145,8 @@ if [ -n "$SPARKLE_PUBLIC_KEY" ] && [ -x "$SIGN_UPDATE" ]; then
 APPCAST
   echo "▸ Appcast written to $DIST/appcast.xml"
 else
-  echo "  ℹ Skipped appcast (no public key checked in, or sign_update tool missing)."
+  echo "  ⚠ Appcast skipped — no public key checked in, sign_update missing, or signing failed"
+  echo "    (CI needs the SPARKLE_ED_PRIVATE_KEY secret; locally the key comes from your Keychain)."
 fi
 
 echo "▸ Packaged $ZIP  ($(du -h "$ZIP" | awk '{print $1}'))"
