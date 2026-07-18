@@ -151,7 +151,13 @@ public enum SessionEventLog {
         let url = URL(fileURLWithPath: (transcriptPath as NSString).expandingTildeInPath)
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
-        guard let data = try? handle.read(upToCount: maxBytes), !data.isEmpty else { return nil }
+        guard var data = try? handle.read(upToCount: maxBytes), !data.isEmpty else { return nil }
+        // A hard byte cap often splits mid-JSONL line; drop the truncated tail so the tolerant
+        // parser sees only complete records (otherwise the cut line can poison the first user turn).
+        if data.count == maxBytes, let lastNewline = data.lastIndex(of: UInt8(ascii: "\n")) {
+            data = Data(data[..<lastNewline])
+        }
+        guard !data.isEmpty else { return nil }
         for event in TranscriptParser.parse(jsonl: String(decoding: data, as: UTF8.self))
         where event.role == .user && !event.isSidechain {
             for block in event.textBlocks {

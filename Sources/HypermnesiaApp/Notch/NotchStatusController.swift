@@ -82,15 +82,14 @@ final class NotchStatusController {
         // (crashed agent, closed terminal), the turn can't still be running.
         working.removeAll { !$0.event.isDemo && !Self.hostLooksAlive($0.event) }
 
-        // You're already looking at that session's app — no pop, and consider it seen. Demo cards
-        // opt out: they're spawned from the very app you're looking at, and must stay visible.
+        // You're already looking at that session's app — hide the pop for now. Do NOT permanently
+        // dismiss: hostPids is per-app, not per-tab, so another Claude/Cursor tab in the same host
+        // would otherwise never resurface when you leave this one. Click/explicit dismiss still
+        // records. Demo cards opt out: they're spawned from the app you're looking at.
         if let front = NSWorkspace.shared.frontmostApplication {
             let frontPid = front.processIdentifier
             let seen = { (card: SessionEventFeed.Card) in
                 !card.event.isDemo && card.event.hostPids.contains(frontPid)
-            }
-            for card in cards where seen(card) {
-                markDismissed(card.event.id)
             }
             cards.removeAll(where: seen)
             // Working rows are presence, not pops: hidden while you're in that app, but never

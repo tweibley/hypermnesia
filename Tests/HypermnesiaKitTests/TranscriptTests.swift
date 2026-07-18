@@ -71,7 +71,7 @@ struct TranscriptTests {
         #expect(convo.messages.last?.content.contains("tool error") == true)
     }
 
-    @Test("strict parser distinguishes valid-empty from bad input")
+    @Test("parser distinguishes valid-empty from wholly bad input")
     func strictValidity() throws {
         #expect(try TranscriptParser.parseValidated(jsonl: "").isEmpty)
         #expect(try TranscriptParser.parseValidated(
@@ -83,5 +83,18 @@ struct TranscriptTests {
         #expect(throws: TranscriptParseError.unrecognized) {
             try TranscriptParser.parseValidated(jsonl: #"{"foreign":"format"}"#)
         }
+    }
+
+    @Test("one corrupt line does not discard the rest of a healthy transcript")
+    func skipsCorruptLines() throws {
+        let mixed = """
+        {"type":"user","timestamp":"2026-06-01T10:00:01.000Z","sessionId":"s1","message":{"role":"user","content":"keep me"}}
+        {not json truncated mid-write
+        {"type":"assistant","timestamp":"2026-06-01T10:00:02.000Z","sessionId":"s1","message":{"role":"assistant","content":[{"type":"text","text":"also keep"}]}}
+        """
+        let events = try TranscriptParser.parseValidated(jsonl: mixed)
+        #expect(events.count == 2)
+        #expect(events[0].textBlocks.first?.contains("keep me") == true)
+        #expect(events[1].textBlocks.first?.contains("also keep") == true)
     }
 }

@@ -38,7 +38,8 @@ versions follow [SemVer](https://semver.org).
   popping "finished". Toggleable under Settings → Notch ("Show agents while they work").
 - **Durable capture queue**: hooks snapshot the host transcript into Application Support before
   enqueueing, so Claude/Cursor/Antigravity deleting their file after the hook returns cannot strand
-  the out-of-band drain. Snapshots are removed when a queue row finishes or is cleared.
+  the out-of-band drain. Snapshot failure falls back to the host path (retryable) instead of
+  dropping the session; snapshots are removed only when no surviving queue row still needs them.
 - **Clear failed captures**: `hypermnesia drain --clear-failed` and a **Clear failed** button on the
   queue banner remove terminal queue failures without touching memories or host transcripts.
 - **Queue health**: the app banner and `hypermnesia doctor` report pending / processing / retrying /
@@ -59,8 +60,18 @@ versions follow [SemVer](https://semver.org).
 - Maintenance audit outcomes are recorded with the findings they produced (no more empty-array
   recording).
 - Historical reinforcement uses the transcript's end time for backfill; live capture still uses now.
-- Corrupt or unrecognized transcripts stay retryable; missing transcripts fail immediately with a
-  clear `transcript missing` reason instead of burning five "classification failed" retries.
+- Transcript parsing skips corrupt/truncated lines instead of discarding an entire healthy session;
+  wholly undecodable backfill sessions are sealed so they are not re-proposed forever. Missing
+  *managed* snapshots fail immediately; missing host paths stay retryable.
+- Capture-queue drain, prune, and clear-failed no longer delete a `sha256(sessionId)` snapshot
+  still referenced by another row (or refreshed since the deleting pass began). Re-enqueue resets
+  the retry budget.
+- Notch frontmost suppression is transient (multi-tab same host app); release builds include Apple
+  Events entitlement + usage string so click-back works under hardened runtime. `quickTitle` trims
+  a byte-capped truncated final line so notch cards get real titles.
+- Hook installs prefer the app-bundled CLI (version-matched) over a stale PATH binary; background
+  drain commands restore a shell redirect into `drain.log`. Confirmed backfill snapshots off the
+  MainActor so large histories do not beachball the UI.
 - Config load/save is typed and atomic (0600 temp + rename); Settings surfaces persistence errors
   instead of silently falling back.
 

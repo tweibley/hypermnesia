@@ -47,23 +47,27 @@ public enum TranscriptParser {
         (try? parseValidated(jsonl: jsonl)) ?? []
     }
 
-    /// Strict parsing for ingest. Empty transcripts and transcripts made entirely of recognized
-    /// bookkeeping records are valid-empty; malformed JSON or input with no recognized transcript
-    /// records is invalid and must remain retryable.
+    /// Parsing for ingest. Skip undecodable lines (truncated final line, mid-write noise) so one
+    /// bad record cannot discard an otherwise healthy session. Empty transcripts and transcripts
+    /// made entirely of recognized bookkeeping are valid-empty. Input with zero recognized records
+    /// is invalid: all-corrupt → `.corrupt`, unknown dialect → `.unrecognized`.
     public static func parseValidated(jsonl: String) throws -> [TranscriptEvent] {
         let decoder = JSONDecoder()
         var events: [TranscriptEvent] = []
         let lines = jsonl.split(separator: "\n", omittingEmptySubsequences: true)
         var recognized = 0
+        var skippedCorrupt = 0
         for line in lines {
             guard let data = line.data(using: .utf8) else {
-                throw TranscriptParseError.corrupt
+                skippedCorrupt += 1
+                continue
             }
             let raw: RawLine
             do {
                 raw = try decoder.decode(RawLine.self, from: data)
             } catch {
-                throw TranscriptParseError.corrupt
+                skippedCorrupt += 1
+                continue
             }
 
             // Antigravity lines carry `step_index`/`source` instead of a role — a separate dialect.
@@ -121,7 +125,7 @@ public enum TranscriptParser {
             ))
         }
         if !lines.isEmpty, recognized == 0 {
-            throw TranscriptParseError.unrecognized
+            throw skippedCorrupt > 0 ? TranscriptParseError.corrupt : TranscriptParseError.unrecognized
         }
         return events
     }

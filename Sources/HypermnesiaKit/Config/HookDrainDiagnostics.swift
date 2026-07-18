@@ -14,13 +14,16 @@ public enum HookDrainDiagnostics {
         logDirectory.appendingPathComponent("drain.log")
     }
 
-    /// Capture synchronously, then launch the existing one-shot drainer in the background. The
-    /// drainer redirects itself after startup, so hook stdout remains reserved for hook protocol
-    /// output and no diagnostic output is discarded.
+    /// Capture synchronously, then launch the existing one-shot drainer in the background.
+    /// Shell-level redirect covers stale CLIs that lack `--hook-background`; modern builds also
+    /// `dup2` into the same log after startup. Hook stdout stays reserved for protocol output.
     public static func captureCommand(binaryPath: String, client: String? = nil) -> String {
         let binary = ConfigFile.shellQuote(binaryPath)
         let clientArgument = client.map { " --client \($0)" } ?? ""
-        return "\(binary) capture\(clientArgument); (nohup \(binary) drain --hook-background &)"
+        let logDir = ConfigFile.shellQuote(logDirectory.path)
+        let log = ConfigFile.shellQuote(logURL.path)
+        return "\(binary) capture\(clientArgument); "
+            + "(mkdir -p \(logDir) && nohup \(binary) drain --hook-background >>\(log) 2>&1 &)"
     }
 
     /// Rotate `drain.log` to `drain.log.1` once it reaches the cap, then open the active log for

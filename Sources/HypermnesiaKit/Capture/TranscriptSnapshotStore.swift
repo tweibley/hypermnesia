@@ -51,15 +51,31 @@ public enum TranscriptSnapshotStore {
         _ path: String,
         in supportDirectory: URL = StoreLocation.supportDirectory
     ) -> Bool {
+        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
         let root = directory(in: supportDirectory).standardizedFileURL.path + "/"
-        return URL(fileURLWithPath: path).standardizedFileURL.path.hasPrefix(root)
+        if standardized.hasPrefix(root) { return true }
+        // Snapshots created against a non-default support root (tests) still use the
+        // …/capture-transcripts/<digest>.jsonl layout — treat those as managed too so drain
+        // can mark a missing snapshot terminal without requiring the live support directory.
+        guard let range = standardized.range(of: "/capture-transcripts/") else { return false }
+        let rest = standardized[range.upperBound...]
+        return !rest.contains("/") && rest.hasSuffix(".jsonl")
     }
 
+    /// Delete a managed snapshot when nothing else needs it. Skips host-owned paths. When
+    /// `enqueuedAt` is supplied, also skips if the file's mtime is newer — a concurrent re-capture
+    /// refreshed the same sessionId digest after this row was claimed.
     public static func removeIfManaged(
         _ path: String,
-        in supportDirectory: URL = StoreLocation.supportDirectory
+        in supportDirectory: URL = StoreLocation.supportDirectory,
+        enqueuedAt: Date? = nil
     ) {
         guard isManaged(path, in: supportDirectory) else { return }
+        if let enqueuedAt,
+           let mtime = try? FileManager.default.attributesOfItem(atPath: path)[.modificationDate] as? Date,
+           mtime > enqueuedAt {
+            return
+        }
         try? FileManager.default.removeItem(atPath: path)
     }
 }

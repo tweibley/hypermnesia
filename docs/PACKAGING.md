@@ -78,8 +78,9 @@ cutting releases, and the CI workflow that automates it — is in
 
 - The app is **not sandboxed** (it reads `~/.claude`, runs `git`/`claude` subprocesses) — fine for
   Developer ID distribution; only the Mac App Store requires sandboxing.
-- Hardened runtime needs no extra entitlements here: outbound HTTPS (Gemini) and spawning
-  subprocesses are allowed by default.
+- Hardened runtime needs `com.apple.security.automation.apple-events` (see
+  `packaging/Hypermnesia.entitlements`) so notch click-back can focus terminal/IDE tabs. Outbound
+  HTTPS (Gemini) and spawning subprocesses are allowed by default.
 - The CLI (`hypermnesia`) is **bundled inside the app** at `Contents/Resources/hypermnesia`, so the
   cask can symlink it onto `PATH` with one artifact. For a from-source (non-cask) install, symlink
   `~/.local/bin/hypermnesia` to `.build/release/hypermnesia` instead.
