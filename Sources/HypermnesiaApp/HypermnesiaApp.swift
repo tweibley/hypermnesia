@@ -303,8 +303,17 @@ struct MenuBarView: View {
     }
 
     private func openSettingsWindow() {
+        // A popover click doesn't activate the app, and an inactive app's freshly created
+        // Settings window stays buried behind whichever app IS active. Activate first, then
+        // raise the window once it exists (SwiftUI creates it on a later runloop turn).
+        NSApp.activate(ignoringOtherApps: true)
         openSettings()
         dismiss()   // close the menu-bar popover when opening Settings
+        DispatchQueue.main.async {
+            NSApp.windows.first {
+                $0.identifier?.rawValue.contains("Settings") == true || $0.title.hasSuffix("Settings")
+            }?.makeKeyAndOrderFront(nil)
+        }
     }
 
     private func restartApp() {

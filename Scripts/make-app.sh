@@ -34,10 +34,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>app.hypermnesia</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <!-- Dev bundle: no SUFeedURL/SUPublicEDKey here; updater remains intentionally dormant. -->
   <key>NSAppleEventsUsageDescription</key>
   <string>Hypermnesia focuses the exact terminal tab of a coding session when you click its notch status card.</string>
 </dict>

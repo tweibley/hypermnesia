@@ -5,9 +5,10 @@ import Sparkle
 /// Sparkle auto-update wiring.
 ///
 /// Active only when running from the assembled .app bundle with a configured feed —
-/// `SUFeedURL` and `SUPublicEDKey` are stamped into Info.plist by Scripts/release.sh
-/// (and Scripts/make-app.sh). A bare `swift run` build has neither, so the updater
-/// stays dormant and the "Check for Updates…" items hide themselves.
+/// `SUFeedURL` and `SUPublicEDKey` are stamped into Info.plist by Scripts/release.sh.
+/// Dev bundles from Scripts/make-app.sh intentionally omit them, so local builds
+/// keep the updater dormant; a bare `swift run` build does too. In both cases the
+/// "Check for Updates…" items hide themselves.
 ///
 /// Scheduled background checks use Sparkle's "gentle reminders" hook (the approach
 /// Ghostty hand-rolls with a custom user driver): instead of a modal window appearing
