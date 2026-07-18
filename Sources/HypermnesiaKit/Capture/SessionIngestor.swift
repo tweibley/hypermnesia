@@ -237,7 +237,7 @@ public enum SessionIngestor {
 
         // We hold the drain lock, so any `.processing` row is orphaned from a drain that died
         // mid-classification — recover it to `.pending` instead of leaving it stuck forever.
-        try? store.resetOrphanedProcessing()
+        _ = try? store.resetOrphanedProcessing()
         // Housekeeping while we're the sole drainer: drop long-finished queue rows so the table
         // doesn't grow one row per session forever.
         _ = try? store.pruneFinishedCaptures()
