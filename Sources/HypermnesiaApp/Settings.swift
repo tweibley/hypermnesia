@@ -972,6 +972,7 @@ private struct StorageSettings: View {
 
 private struct AboutSettings: View {
     @Bindable var model: SettingsModel
+    @ObservedObject private var updater = UpdaterModel.shared
 
     var body: some View {
         SectionHeader(title: "About", subtitle: "Durable, decaying memory for Claude Code, Cursor, and Antigravity.")
@@ -981,6 +982,18 @@ private struct AboutSettings: View {
                 Text("Version \(Hypermnesia.version)").font(.callout).foregroundStyle(.secondary)
                 Text("Captures memories from your Claude Code, Cursor, and Google Antigravity sessions, lets them decay over time, and injects the relevant ones back into future sessions — all on-device.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Divider()
+                HStack(spacing: 8) {
+                    Label("Update status", systemImage: "arrow.down.circle")
+                    Text(updateStatus)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if updater.isAvailable {
+                        Button("Check now") { updater.checkForUpdates() }
+                            .controlSize(.small)
+                            .disabled(!updater.canCheckForUpdates)
+                    }
+                }
                 Divider()
                 Toggle(isOn: Binding(
                     get: { model.launchAtLoginEnabled },
@@ -998,5 +1011,11 @@ private struct AboutSettings: View {
             }
             .padding(6)
         }
+    }
+
+    private var updateStatus: String {
+        if !updater.isAvailable { return "Unavailable in this build" }
+        if let version = updater.availableUpdateVersion { return "Update available: \(version)" }
+        return "No pending update"
     }
 }

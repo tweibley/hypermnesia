@@ -14,6 +14,9 @@ versions follow [SemVer](https://semver.org).
   and the app offers "Check for Updates…" in the app menu and the menu-bar popover. Background
   checks are gentle: no surprise dialogs, just an "Update available" banner in the popover.
   Homebrew installs keep updating via `brew upgrade`, as before.
+- **About update status**: Settings → About now shows updater state at a glance
+  ("Unavailable in this build", "No pending update", or "Update available: x.y.z"),
+  plus a one-click "Check now" action when updater wiring is active.
 - **Notch status**: live session status pops from the Mac's notch (top-center on displays
   without one) — when an agent finishes its turn, and when a Claude Code session needs you
   (permission request / waiting for input). One click jumps back to that exact session: the
