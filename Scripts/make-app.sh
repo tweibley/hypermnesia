@@ -38,6 +38,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Hypermnesia focuses the exact terminal tab of a coding session when you click its notch status card.</string>
 </dict>
 </plist>
 PLIST

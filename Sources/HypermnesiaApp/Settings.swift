@@ -17,8 +17,16 @@ final class SettingsModel {
         case error
     }
 
-    var config: AppConfig { didSet { AppConfigStore.save(config) } }
+    var config: AppConfig {
+        didSet {
+            AppConfigStore.save(config)
+            // Let live surfaces (the notch status display) react now, not on their next poll.
+            NotificationCenter.default.post(name: .hypermnesiaConfigChanged, object: nil)
+        }
+    }
     var hooksInstalled: Bool
+    /// Hooks installed by an older version, missing the notch status events — offer re-install.
+    var hooksNeedUpdate = false
     var recallGuideInstalled: Bool
     var recallPermissionsInstalled: Bool
     var mcpServerState: MCPServerState = .checking
@@ -270,8 +278,23 @@ final class SettingsModel {
         cursorMCPInstalled = CursorMCPInstaller.isInstalled()
         antigravityHooksInstalled = AntigravityHookInstaller.isInstalled()
         antigravityMCPInstalled = AntigravityMCPInstaller.isInstalled()
+        hooksNeedUpdate = HookInstaller.needsReinstall()
+            || CursorHookInstaller.needsReinstall()
+            || AntigravityHookInstaller.needsReinstall()
         launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
         refreshMCPServerStatus()
+    }
+
+    /// Re-run every installed client's hook install so old configs pick up the notch status
+    /// events (Notification + session-event). Idempotent — merged entries replace ours in place.
+    func updateHooksForNotch() {
+        if HookInstaller.isInstalled() { setHooks(true) }
+        if CursorHookInstaller.isInstalled() { setCursorHooks(true) }
+        if AntigravityHookInstaller.isInstalled() { setAntigravityHooks(true) }
+        hooksNeedUpdate = HookInstaller.needsReinstall()
+            || CursorHookInstaller.needsReinstall()
+            || AntigravityHookInstaller.needsReinstall()
+        if !hooksNeedUpdate { statusMessage = "Hooks updated — sessions now report live status." }
     }
 
     // MARK: - Launch at login
@@ -341,7 +364,7 @@ final class SettingsModel {
 // MARK: - Settings window
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case onboarding, cursor, antigravity, classifier, capture, hydration, storage, about
+    case onboarding, cursor, antigravity, classifier, capture, hydration, notch, storage, about
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -351,6 +374,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .classifier: "Classifier"
         case .capture: "Capture"
         case .hydration: "Hydration"
+        case .notch: "Notch"
         case .storage: "Storage"
         case .about: "About"
         }
@@ -363,6 +387,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .classifier: "brain.head.profile"
         case .capture: "dot.radiowaves.left.and.right"
         case .hydration: "drop.fill"
+        case .notch: "menubar.dock.rectangle"
         case .storage: "externaldrive"
         case .about: "info.circle"
         }
@@ -409,6 +434,7 @@ struct SettingsView: View {
                     case .classifier: ClassifierSettings(model: model)
                     case .capture: CaptureSettings(model: model)
                     case .hydration: HydrationSettings(model: model)
+                    case .notch: NotchSettings(model: model)
                     case .storage: StorageSettings()
                     case .about: AboutSettings(model: model)
                     }
@@ -452,7 +478,7 @@ private struct OnboardingSettings: View {
                 setupRow(
                     title: "Capture hooks",
                     detail: model.hooksInstalled
-                        ? "Installed (SessionStart, UserPromptSubmit, Stop, SessionEnd)."
+                        ? "Installed (SessionStart, UserPromptSubmit, Stop, SessionEnd, Notification)."
                         : "Not installed — memory won't auto-capture from Claude sessions.",
                     done: model.hooksInstalled,
                     actionTitle: "Install",
@@ -714,7 +740,7 @@ private struct CaptureSettings: View {
                     set: { model.setHooks($0) }
                 )) {
                     Text("Capture sessions automatically")
-                    Text("Installs hooks for all projects · SessionStart, UserPromptSubmit, Stop, SessionEnd")
+                    Text("Installs hooks for all projects · SessionStart, UserPromptSubmit, Stop, SessionEnd, Notification")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Divider()
@@ -817,6 +843,92 @@ private struct MCPServerNudge: View {
             }
         }
         .padding(.leading, 4)
+    }
+}
+
+private struct NotchSettings: View {
+    @Bindable var model: SettingsModel
+
+    var body: some View {
+        SectionHeader(
+            title: "Notch status",
+            subtitle: "Live session status that pops from the notch — one click back to that exact session."
+        )
+
+        if model.hooksNeedUpdate {
+            GroupBox {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.caution)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Your hooks predate notch status").font(.callout.weight(.semibold))
+                        Text("Re-install adds the session-event hooks (working heartbeats, Stop, Notification) without touching anything else.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Update hooks") { model.updateHooksForNotch() }
+                        .buttonStyle(.borderedProminent).controlSize(.small)
+                }
+                .padding(6)
+            }
+        }
+
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: $model.config.notchEnabled) {
+                    Text("Show session status at the notch")
+                    Text("Pops below the Mac's notch (top-center on displays without one). Cards auto-hide while you're already in that session's app.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Divider()
+                Toggle(isOn: $model.config.notchOnAgentFinish) {
+                    Text("When an agent finishes")
+                    Text("The turn completed while you were elsewhere — Claude Code, Cursor, and Antigravity sessions.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.notchEnabled)
+                Toggle(isOn: $model.config.notchOnNeedsAttention) {
+                    Text("When a session needs you")
+                    Text("Permission requests and waiting-for-input. Claude Code only — Cursor and Antigravity have no equivalent hook.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.notchEnabled)
+                Toggle(isOn: $model.config.notchShowWorking) {
+                    Text("Show agents while they work")
+                    Text("A slim count hangs from the notch while agents are mid-turn — hover it to see each session and jump back. Never pops.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.notchEnabled)
+                Divider()
+                HStack(spacing: 10) {
+                    Button("Preview cards") {
+                        // Ride the real pipeline: append demo events, let the watcher/reducer show them.
+                        let ancestors = ProcessAncestry.chain(from: ProcessInfo.processInfo.processIdentifier)
+                        for event in SessionEventDemo.events(
+                            hostPids: ancestors.map(\.pid), hostPaths: ancestors.map(\.path)
+                        ) {
+                            SessionEventLog.append(event)
+                        }
+                        NotchStatusController.shared.refresh()
+                    }
+                    .disabled(!model.config.notchEnabled)
+                    Button("Clear preview") {
+                        for event in SessionEventDemo.clearEvents() { SessionEventLog.append(event) }
+                        NotchStatusController.shared.refresh()
+                    }
+                    Text("or from a terminal:  hypermnesia notch-demo")
+                        .font(.system(.caption, design: .monospaced)).foregroundStyle(.tertiary)
+                }
+            }
+            .padding(6)
+        }
+
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Clicking a card focuses the exact iTerm2/Terminal tab (first click asks for Automation permission) or the hosting IDE window.",
+                  systemImage: "info.circle")
+            Label("Attention cards stay up to 15 minutes; finished cards fade after a minute and a half.",
+                  systemImage: "info.circle")
+        }
+        .font(.caption).foregroundStyle(.secondary)
     }
 }
 

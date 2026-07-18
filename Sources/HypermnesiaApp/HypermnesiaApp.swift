@@ -62,11 +62,17 @@ struct HypermnesiaApp: App {
 /// bundle). Without this the main window opens behind the terminal and never comes forward.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Headless notch-panel rendering (design iteration); exits the process when requested.
+        NotchPreviewHarness.runIfRequested()
         // Headless share-artifact rendering (design iteration); exits the process when requested.
         Task { @MainActor in await SharePreviewHarness.runIfRequested() }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         WindowSupport.bringToFront()
+        // Live session status at the notch (skipped in the headless share-render harness).
+        if ProcessInfo.processInfo.environment["HYPERMNESIA_SHARE_PREVIEW_DIR"] == nil {
+            NotchStatusController.shared.start()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
