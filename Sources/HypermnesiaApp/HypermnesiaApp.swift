@@ -16,6 +16,9 @@ struct HypermnesiaApp: App {
         }
         .defaultSize(width: 980, height: 640)
         .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesButton()
+            }
             CommandGroup(after: .textEditing) {
                 Button("Find") { model.requestSearchFocus() }
                     .keyboardShortcut("f", modifiers: .command)
@@ -240,6 +243,13 @@ struct MenuBarView: View {
                 Text(status).font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.bottom, 2)
             }
             Divider().padding(.vertical, 5).padding(.horizontal, 6)
+            if UpdaterModel.shared.isAvailable {
+                Button {
+                    UpdaterModel.shared.checkForUpdates()
+                    dismiss()   // Sparkle's window shouldn't fight the popover for focus
+                } label: { MenuItemLabel(icon: "arrow.down.circle", text: "Check for Updates…") }
+                    .buttonStyle(.plain).menuHover()
+            }
             Button { restartApp() } label: { MenuItemLabel(icon: "arrow.clockwise", text: "Restart") }
                 .buttonStyle(.plain).menuHover()
             Button { NSApp.terminate(nil) } label: { MenuItemLabel(icon: "power", text: "Quit") }

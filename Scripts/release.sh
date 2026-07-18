@@ -21,10 +21,27 @@ BUILD_DIR="$(swift build -c release $ARCHFLAGS --show-bin-path)"
 
 echo "▸ Assembling ${APP}…"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BUILD_DIR/HypermnesiaApp" "$APP/Contents/MacOS/Hypermnesia"
 cp "$BUILD_DIR/hypermnesia"    "$APP/Contents/Resources/hypermnesia"   # bundled CLI — the cask symlinks this onto PATH
+# Sparkle (auto-update) — linked via @rpath ../Frameworks; SPM stages it next to the binary.
+ditto "$BUILD_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 cp LICENSE THIRD-PARTY-LICENSES.md "$APP/Contents/Resources/"
+
+# Sparkle feed wiring goes into Info.plist only when the public signing key is checked in
+# (packaging/sparkle-public-ed-key.txt, printed by Sparkle's `generate_keys -p`). Without it
+# the updater stays dormant in the shipped app — release still works, just no auto-update.
+SPARKLE_FEED_URL="https://github.com/tweibley/hypermnesia/releases/latest/download/appcast.xml"
+SPARKLE_PUBLIC_KEY=""
+[ -f packaging/sparkle-public-ed-key.txt ] && SPARKLE_PUBLIC_KEY="$(tr -d '[:space:]' < packaging/sparkle-public-ed-key.txt)"
+SPARKLE_PLIST_KEYS=""
+if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
+  SPARKLE_PLIST_KEYS="  <key>SUFeedURL</key><string>${SPARKLE_FEED_URL}</string>
+  <key>SUPublicEDKey</key><string>${SPARKLE_PUBLIC_KEY}</string>"
+else
+  echo "  ℹ packaging/sparkle-public-ed-key.txt missing — shipping with auto-update dormant."
+fi
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -36,10 +53,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+${SPARKLE_PLIST_KEYS}
 </dict>
 </plist>
 PLIST
@@ -56,6 +74,13 @@ echo "▸ Signing — $TYPE"
 # (--options runtime) so notarization accepts every executable in the bundle.
 sign() { codesign --force --options runtime --timestamp --sign "$IDENTITY" "$1" 2>/dev/null \
        || codesign --force --options runtime --sign "$IDENTITY" "$1"; }   # retry without timestamp if offline
+# Sparkle's nested executables, innermost first (per Sparkle's notarization docs; no --deep).
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+for nested in "$SPARKLE/XPCServices/Downloader.xpc" "$SPARKLE/XPCServices/Installer.xpc" \
+              "$SPARKLE/Autoupdate" "$SPARKLE/Updater.app" \
+              "$APP/Contents/Frameworks/Sparkle.framework"; do
+  [ -e "$nested" ] && sign "$nested"
+done
 sign "$APP/Contents/Resources/hypermnesia"
 sign "$APP"
 codesign --verify --verbose=1 "$APP" && echo "  ✓ signature valid"
@@ -81,6 +106,42 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
 # Version-less alias for the site's stable releases/latest/download URL.
 cp "$ZIP" "$DIST/Hypermnesia.zip"
+
+# Sparkle appcast — signed with the EdDSA private key (CI provides SPARKLE_ED_PRIVATE_KEY;
+# locally, run Sparkle's generate_keys once and sign_update falls back to your Keychain).
+# Published as a release asset so releases/latest/download/appcast.xml is a stable feed URL.
+SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+if [ -n "$SPARKLE_PUBLIC_KEY" ] && [ -x "$SIGN_UPDATE" ]; then
+  if [ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]; then
+    KEYFILE="$(mktemp)"
+    printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$KEYFILE"
+    SIG_ATTRS="$("$SIGN_UPDATE" --ed-key-file "$KEYFILE" "$ZIP")"
+    rm -f "$KEYFILE"
+  else
+    SIG_ATTRS="$("$SIGN_UPDATE" "$ZIP")"
+  fi
+  cat > "$DIST/appcast.xml" <<APPCAST
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.sparkle-project.org/xml/1.0/modules/sparkle">
+  <channel>
+    <title>Hypermnesia</title>
+    <link>https://hypermnesia.app</link>
+    <item>
+      <title>Version ${VERSION}</title>
+      <pubDate>$(LC_ALL=C date -u +"%a, %d %b %Y %H:%M:%S +0000")</pubDate>
+      <sparkle:version>${VERSION}</sparkle:version>
+      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<p>See what changed in the <a href="https://github.com/tweibley/hypermnesia/releases/tag/v${VERSION}">release notes</a>.</p>]]></description>
+      <enclosure url="https://github.com/tweibley/hypermnesia/releases/download/v${VERSION}/Hypermnesia-${VERSION}.zip" ${SIG_ATTRS} type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>
+APPCAST
+  echo "▸ Appcast written to $DIST/appcast.xml"
+else
+  echo "  ℹ Skipped appcast (no public key checked in, or sign_update tool missing)."
+fi
 
 echo "▸ Packaged $ZIP  ($(du -h "$ZIP" | awk '{print $1}'))"
 echo ""

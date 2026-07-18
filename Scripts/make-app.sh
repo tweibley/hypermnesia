@@ -13,8 +13,11 @@ swift build -c "$CONFIG" --product hypermnesia
 BIN=".build/$CONFIG/HypermnesiaApp"
 APP="Hypermnesia.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/Hypermnesia"
+# Sparkle (auto-update) — the executable links it via @rpath ../Frameworks, so the app
+# won't launch from a bundle without it. SPM stages the framework next to the binary.
+ditto ".build/$CONFIG/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 # Bundle the CLI like release.sh does — the app installs hooks via this copy when nothing put
 # `hypermnesia` on PATH (the direct-download install path).
 cp ".build/$CONFIG/hypermnesia" "$APP/Contents/Resources/hypermnesia"

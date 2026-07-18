@@ -43,6 +43,28 @@ is different from the "Apple Development" cert used for local builds.
    success. It then writes a versioned, cask-ready `dist/Hypermnesia-<version>.zip` and prints its
    `sha256`. The result is double-click-distributable.
 
+## Auto-update (Sparkle)
+
+Direct-download installs keep themselves current via [Sparkle](https://sparkle-project.org): the app
+checks `https://github.com/tweibley/hypermnesia/releases/latest/download/appcast.xml` (a signed feed
+`release.sh` writes to `dist/appcast.xml` and the release workflow uploads as a release asset).
+Homebrew users can keep using `brew upgrade`; both channels serve the same zip.
+
+How the pieces fit:
+
+- **Public key** — committed at `packaging/sparkle-public-ed-key.txt`; `release.sh` stamps it into
+  Info.plist as `SUPublicEDKey` along with `SUFeedURL`. If the file is missing, the app ships with
+  the updater dormant (menu items hide themselves) and the release still succeeds.
+- **Private key** — lives in the release-signing Mac's Keychain (created by Sparkle's
+  `generate_keys`, found under `.build/artifacts/sparkle/Sparkle/bin/` after `swift package
+  resolve`). CI signs with the `SPARKLE_ED_PRIVATE_KEY` repo secret instead: export with
+  `generate_keys -x key.txt`, `gh secret set SPARKLE_ED_PRIVATE_KEY < key.txt`, delete `key.txt`.
+- **Signing order** — Sparkle's nested executables (XPC services, `Autoupdate`, `Updater.app`, the
+  framework) are hardened-runtime signed individually before the app, per Sparkle's notarization
+  docs; `--deep` is never used.
+- **Versioning** — `CFBundleVersion` is set to the marketing version, and the appcast's
+  `sparkle:version` matches it, so Sparkle's standard comparator just compares release numbers.
+
 ## Homebrew cask
 
 The friendliest install for end users is `brew install --cask tweibley/tap/hypermnesia`. A cask

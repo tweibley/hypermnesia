@@ -3,6 +3,15 @@
 Notable changes to Hypermnesia. Format follows [Keep a Changelog](https://keepachangelog.com);
 versions follow [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- **Auto-update**: direct-download installs now keep themselves current via
+  [Sparkle](https://sparkle-project.org) — a signed `appcast.xml` is published with every release,
+  and the app offers "Check for Updates…" in the app menu and the menu-bar popover. Homebrew
+  installs keep updating via `brew upgrade`, as before.
+
 ## [0.1.0] — 2026-07-15
 
 First public release.

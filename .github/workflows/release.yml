@@ -9,6 +9,10 @@
 #   MACOS_NOTARY_ISSUER_ID    the Issuer ID from App Store Connect → Integrations
 #   HOMEBREW_TAP_TOKEN        a PAT with `contents:write` on tweibley/homebrew-tap
 #                             (only needed for the auto-update-tap job)
+#   SPARKLE_ED_PRIVATE_KEY    the EdDSA private key for Sparkle update signing — export with
+#                             `generate_keys -x key.txt` (Sparkle's tool), `gh secret set
+#                             SPARKLE_ED_PRIVATE_KEY < key.txt`, then delete key.txt. The
+#                             matching public key is committed at packaging/sparkle-public-ed-key.txt.
 #
 # Then: `git tag v0.1.0 && git push origin v0.1.0`.
 name: release
@@ -79,6 +83,7 @@ jobs:
         env:
           NOTARY_PROFILE: hypermnesia-notary
           UNIVERSAL: "1"
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           bash Scripts/release.sh
@@ -91,9 +96,11 @@ jobs:
         with:
           # The version-less alias gives the site a stable direct-download URL:
           # https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip
+          # appcast.xml rides along so releases/latest/download/appcast.xml is the Sparkle feed.
           files: |
             dist/Hypermnesia-${{ steps.pkg.outputs.version }}.zip
             dist/Hypermnesia.zip
+            dist/appcast.xml
           generate_release_notes: true
 
   update-tap:
