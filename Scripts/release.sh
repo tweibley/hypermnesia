@@ -79,6 +79,8 @@ ZIP="$DIST/Hypermnesia-$VERSION.zip"
 rm -f "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+# Version-less alias for the site's stable releases/latest/download URL.
+cp "$ZIP" "$DIST/Hypermnesia.zip"
 
 echo "▸ Packaged $ZIP  ($(du -h "$ZIP" | awk '{print $1}'))"
 echo ""

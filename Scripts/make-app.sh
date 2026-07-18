@@ -8,12 +8,16 @@ CONFIG="${1:-release}"
 VERSION="$(tr -d '[:space:]' < VERSION)"
 echo "Building HypermnesiaApp ($CONFIG)…"
 swift build -c "$CONFIG" --product HypermnesiaApp
+swift build -c "$CONFIG" --product hypermnesia
 
 BIN=".build/$CONFIG/HypermnesiaApp"
 APP="Hypermnesia.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Hypermnesia"
+# Bundle the CLI like release.sh does — the app installs hooks via this copy when nothing put
+# `hypermnesia` on PATH (the direct-download install path).
+cp ".build/$CONFIG/hypermnesia" "$APP/Contents/Resources/hypermnesia"
 cp LICENSE THIRD-PARTY-LICENSES.md "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST

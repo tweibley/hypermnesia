@@ -89,7 +89,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/Hypermnesia-${{ steps.pkg.outputs.version }}.zip
+          # The version-less alias gives the site a stable direct-download URL:
+          # https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip
+          files: |
+            dist/Hypermnesia-${{ steps.pkg.outputs.version }}.zip
+            dist/Hypermnesia.zip
           generate_release_notes: true
 
   update-tap:
