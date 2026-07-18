@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-07-18
+
 ### Added
 
 - **Auto-update**: direct-download installs now keep themselves current via
