@@ -16,6 +16,10 @@ public enum CursorHookInstaller {
     static let legacyMarker = "hyperthymesia"   // pre-rename hooks must stay detectable/removable
     static let hydrateEvents = ["sessionStart"]
     static let captureEvents = ["stop", "sessionEnd"]
+    /// Notch working state: a submitted prompt starts a turn…
+    static let promptEvents = ["beforeSubmitPrompt"]
+    /// …and the observational after-hooks are throttled "still working" heartbeats.
+    static let heartbeatEvents = ["afterFileEdit", "afterShellExecution"]
 
     public static func settingsURL(projectPath: String? = nil) -> URL {
         base(projectPath: projectPath).appendingPathComponent("hooks.json")
@@ -56,16 +60,35 @@ public enum CursorHookInstaller {
         let bin = ConfigFile.shellQuote(binaryPath)
         let hydrateCmd = "\(bin) hydrate --client cursor"
         let captureCmd = "\(bin) capture --client cursor; (nohup \(bin) drain >/dev/null 2>&1 &)"
-        for event in hydrateEvents { hooks[event] = mergedEntry(into: hooks[event], command: hydrateCmd) }
-        for event in captureEvents { hooks[event] = mergedEntry(into: hooks[event], command: captureCmd) }
+        // Notch status: a separate hook entry (each entry gets its own stdin copy of the payload —
+        // a `;` chain would let capture starve it of stdin). beforeSubmitPrompt is answered with
+        // `{"continue": true}` by the CLI, so it never holds a prompt.
+        let statusCmd = "\(bin) session-event --client cursor"
+        for event in hydrateEvents { hooks[event] = mergedEntry(into: hooks[event], commands: [hydrateCmd]) }
+        for event in captureEvents { hooks[event] = mergedEntry(into: hooks[event], commands: [captureCmd, statusCmd]) }
+        for event in promptEvents + heartbeatEvents { hooks[event] = mergedEntry(into: hooks[event], commands: [statusCmd]) }
         settings["hooks"] = hooks
         return settings
     }
 
-    static func mergedEntry(into existing: Any?, command: String) -> [[String: Any]] {
+    /// Hooks are installed but predate some notch status event (`session-event` missing from a
+    /// stop, prompt, or heartbeat hook) — the Settings UI offers a one-click re-install.
+    public static func needsReinstall(projectPath: String? = nil) -> Bool {
+        guard isInstalled(projectPath: projectPath),
+              let hooks = read(settingsURL(projectPath: projectPath))["hooks"] as? [String: Any] else { return false }
+        let statusCarriers = captureEvents + promptEvents + heartbeatEvents
+        return !statusCarriers.allSatisfy { event in
+            ((hooks[event] as? [[String: Any]]) ?? [])
+                .filter { entryHasMarker($0) }
+                .compactMap { $0["command"] as? String }
+                .contains { $0.contains("session-event") }
+        }
+    }
+
+    static func mergedEntry(into existing: Any?, commands: [String]) -> [[String: Any]] {
         var entries = (existing as? [[String: Any]]) ?? []
         entries.removeAll { entryHasMarker($0) }
-        entries.append(["type": "command", "command": command])
+        entries.append(contentsOf: commands.map { ["type": "command", "command": $0] })
         return entries
     }
 

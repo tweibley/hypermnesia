@@ -9,6 +9,9 @@ public enum HookInstaller {
     static let legacyMarker = "hyperthymesia"
     static let hydrateEvents = ["SessionStart", "UserPromptSubmit"]
     static let captureEvents = ["Stop", "SessionEnd"]
+    /// Feed the app's notch status display: Notification (permission request / waiting for input)
+    /// and PostToolUse (a cheap throttled "still working" heartbeat).
+    static let statusEvents = ["Notification", "PostToolUse"]
 
     public static func settingsURL(projectPath: String? = nil) -> URL {
         let base = projectPath.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
@@ -52,16 +55,41 @@ public enum HookInstaller {
         let bin = ConfigFile.shellQuote(binaryPath)
         let hydrateCmd = "\(bin) hydrate"
         let captureCmd = "\(bin) capture; (nohup \(bin) drain >/dev/null 2>&1 &)"
-        for event in hydrateEvents { hooks[event] = mergedEntry(into: hooks[event], command: hydrateCmd) }
-        for event in captureEvents { hooks[event] = mergedEntry(into: hooks[event], command: captureCmd) }
+        let statusCmd = "\(bin) session-event"
+        // SessionStart hydrates; UserPromptSubmit hydrates AND stamps the turn's start for the
+        // notch working state. Status emitters are always their own hook command — Claude Code
+        // feeds the payload to each command's stdin, whereas a `;` chain would let the first
+        // command starve the second of stdin.
+        hooks["SessionStart"] = mergedEntry(into: hooks["SessionStart"], commands: [hydrateCmd])
+        hooks["UserPromptSubmit"] = mergedEntry(into: hooks["UserPromptSubmit"], commands: [hydrateCmd, statusCmd])
+        for event in captureEvents { hooks[event] = mergedEntry(into: hooks[event], commands: [captureCmd, statusCmd]) }
+        for event in statusEvents { hooks[event] = mergedEntry(into: hooks[event], commands: [statusCmd]) }
         settings["hooks"] = hooks
         return settings
     }
 
-    static func mergedEntry(into existing: Any?, command: String) -> [[String: Any]] {
+    /// Hooks are installed but predate some notch status event (no Notification/PostToolUse hook,
+    /// or Stop/UserPromptSubmit without `session-event`) — the Settings UI offers a one-click
+    /// re-install.
+    public static func needsReinstall(projectPath: String? = nil) -> Bool {
+        guard let data = try? Data(contentsOf: settingsURL(projectPath: projectPath)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let hooks = json["hooks"] as? [String: Any] else { return false }
+        guard isInstalled(projectPath: projectPath) else { return false }
+        let statusCarriers = statusEvents + captureEvents + ["UserPromptSubmit"]
+        return !statusCarriers.allSatisfy { event in
+            ((hooks[event] as? [[String: Any]]) ?? [])
+                .filter { entryHasMarker($0) }
+                .flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
+                .compactMap { $0["command"] as? String }
+                .contains { $0.contains("session-event") }
+        }
+    }
+
+    static func mergedEntry(into existing: Any?, commands: [String]) -> [[String: Any]] {
         var entries = (existing as? [[String: Any]]) ?? []
         entries.removeAll { entryHasMarker($0) }
-        entries.append(["hooks": [["type": "command", "command": command]]])
+        entries.append(["hooks": commands.map { ["type": "command", "command": $0] }])
         return entries
     }
 

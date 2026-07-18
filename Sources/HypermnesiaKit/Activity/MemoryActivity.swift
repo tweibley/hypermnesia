@@ -91,7 +91,7 @@ public enum MemoryActivityLog {
             guard acquireLockBriefly(fd: fd) else { return }
             defer { flock(fd, LOCK_UN) }
 
-            rotateIfNeeded(fd: fd)
+            rotateIfNeeded(fd: fd, maxFileBytes: maxFileBytes, retainBytes: rotationRetainBytes)
             let line = try encode(event) + "\n"
             guard let data = line.data(using: .utf8) else { return }
             guard writeAll(fd: fd, data: data) else { return }
@@ -209,13 +209,15 @@ public enum MemoryActivityLog {
         return FileSignature(size: size.uint64Value, modifiedAt: modifiedAt)
     }
 
-    private static func rotateIfNeeded(fd: Int32) {
+    /// Truncate-in-place rotation, keeping the newest `retainBytes` aligned to a line boundary.
+    /// Internal + parameterized so `SessionEventLog` shares the exact same discipline.
+    static func rotateIfNeeded(fd: Int32, maxFileBytes: Int, retainBytes: Int) {
         var info = stat()
         guard fstat(fd, &info) == 0 else { return }
         let size = Int(info.st_size)
         guard size > maxFileBytes else { return }
 
-        let keep = min(size, rotationRetainBytes)
+        let keep = min(size, retainBytes)
         var retained = Data()
         if keep > 0 {
             retained = Data(count: keep)
@@ -258,7 +260,7 @@ public enum MemoryActivityLog {
     }
 
     @discardableResult
-    private static func writeAll(fd: Int32, data: Data) -> Bool {
+    static func writeAll(fd: Int32, data: Data) -> Bool {
         data.withUnsafeBytes { raw -> Bool in
             guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return true }
             var written = 0
@@ -276,7 +278,7 @@ public enum MemoryActivityLog {
         }
     }
 
-    private static func tailData(url: URL, maxBytes: Int) -> Data? {
+    static func tailData(url: URL, maxBytes: Int) -> Data? {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let fileSize = attrs[.size] as? NSNumber else {
             return try? Data(contentsOf: url)

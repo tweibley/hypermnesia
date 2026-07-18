@@ -45,16 +45,32 @@ public enum AntigravityHookInstaller {
         settings.removeValue(forKey: legacyHookKey)   // installing replaces a pre-rename hook
         let bin = ConfigFile.shellQuote(binaryPath)
         // Stop's stdout must stay pure JSON ({"decision":…}), so drain is backgrounded with its
-        // output discarded — same shape as the Claude/Cursor capture command.
+        // output discarded — same shape as the Claude/Cursor capture command. The notch status
+        // emitter is its own handler (each gets its own stdin copy) and answers its own decision.
+        // On PreInvocation it doubles as the working-state heartbeat (throttled in the CLI, since
+        // PreInvocation fires before every model call).
         settings[hookKey] = [
             "PreInvocation": [
                 ["type": "command", "command": "\(bin) hydrate --client antigravity"],
+                ["type": "command", "command": "\(bin) session-event --client antigravity"],
             ],
             "Stop": [
                 ["type": "command", "command": "\(bin) capture --client antigravity; (nohup \(bin) drain >/dev/null 2>&1 &)"],
+                ["type": "command", "command": "\(bin) session-event --client antigravity"],
             ],
         ]
         return settings
+    }
+
+    /// Hooks are installed but predate some notch status event (no `session-event` handler on
+    /// Stop or PreInvocation) — the Settings UI offers a one-click re-install.
+    public static func needsReinstall(projectPath: String? = nil) -> Bool {
+        guard let ours = read(settingsURL(projectPath: projectPath))[hookKey] as? [String: Any] else { return false }
+        return !["Stop", "PreInvocation"].allSatisfy { event in
+            ((ours[event] as? [[String: Any]]) ?? [])
+                .compactMap({ $0["command"] as? String })
+                .contains { $0.contains("session-event") }
+        }
     }
 
     // MARK: - Helpers

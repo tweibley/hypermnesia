@@ -22,7 +22,7 @@ struct ConfigTests {
         #expect(partial.injectAtSessionStart == true)
     }
 
-    @Test("HookInstaller installs all four events, preserves other settings, and uninstalls cleanly")
+    @Test("HookInstaller installs all five events, preserves other settings, and uninstalls cleanly")
     func hookInstaller() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ht-hooks-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir.appendingPathComponent(".claude"), withIntermediateDirectories: true)
@@ -36,20 +36,68 @@ struct ConfigTests {
         #expect(!HookInstaller.isInstalled(projectPath: dir.path))
         try HookInstaller.install(binaryPath: "/usr/local/bin/hypermnesia", projectPath: dir.path)
         #expect(HookInstaller.isInstalled(projectPath: dir.path))
+        #expect(!HookInstaller.needsReinstall(projectPath: dir.path))
 
         let json = try JSONSerialization.jsonObject(with: Data(contentsOf: settingsURL)) as! [String: Any]
         #expect(json["theme"] as? String == "dark")  // preserved
         let hooks = json["hooks"] as! [String: Any]
-        #expect(Set(hooks.keys) == ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"])
-        // The pre-existing Stop hook is kept alongside ours.
+        #expect(Set(hooks.keys)
+            == ["SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "SessionEnd", "Notification"])
+        // The pre-existing Stop hook is kept alongside ours; ours carries the capture chain AND
+        // the notch status emitter as separate commands (each needs its own stdin copy).
         let stop = hooks["Stop"] as! [[String: Any]]
         #expect(stop.count == 2)
+        let ourStopCommands = (stop.last?["hooks"] as! [[String: Any]]).compactMap { $0["command"] as? String }
+        #expect(ourStopCommands.count == 2)
+        #expect(ourStopCommands.first?.contains("capture") == true)
+        #expect(ourStopCommands.last?.contains("session-event") == true)
+        let notification = hooks["Notification"] as! [[String: Any]]
+        #expect((notification.first?["hooks"] as! [[String: Any]]).first?["command"] as? String
+            == "'/usr/local/bin/hypermnesia' session-event")
+        // UserPromptSubmit both hydrates and stamps the turn start; PostToolUse is the heartbeat.
+        let prompt = hooks["UserPromptSubmit"] as! [[String: Any]]
+        let promptCommands = (prompt.first?["hooks"] as! [[String: Any]]).compactMap { $0["command"] as? String }
+        #expect(promptCommands.map { $0.contains("hydrate") } == [true, false])
+        #expect(promptCommands.last?.contains("session-event") == true)
+        let postTool = hooks["PostToolUse"] as! [[String: Any]]
+        #expect((postTool.first?["hooks"] as! [[String: Any]]).first?["command"] as? String
+            == "'/usr/local/bin/hypermnesia' session-event")
 
         try HookInstaller.uninstall(projectPath: dir.path)
         #expect(!HookInstaller.isInstalled(projectPath: dir.path))
         let after = try JSONSerialization.jsonObject(with: Data(contentsOf: settingsURL)) as! [String: Any]
         #expect((after["hooks"] as! [String: Any])["Stop"] != nil)  // other Stop hook survives uninstall
+        #expect((after["hooks"] as! [String: Any])["Notification"] == nil)
         #expect(after["theme"] as? String == "dark")
+    }
+
+    @Test("needsReinstall flags hook configs that predate the notch status events")
+    func hookInstallerNeedsReinstall() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ht-hooks-old-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent(".claude"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // A pre-notch install: hooks present, but no Notification event and no session-event command.
+        let legacy = #"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"'/usr/local/bin/hypermnesia' capture"}]}]}}"#
+        try Data(legacy.utf8).write(to: HookInstaller.settingsURL(projectPath: dir.path))
+        #expect(HookInstaller.isInstalled(projectPath: dir.path))
+        #expect(HookInstaller.needsReinstall(projectPath: dir.path))
+
+        // A notch-v1 install (session-event on Stop/Notification, but no PostToolUse heartbeat or
+        // UserPromptSubmit turn-start) also predates the working state.
+        let v1 = #"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"'/usr/local/bin/hypermnesia' capture"},{"type":"command","command":"'/usr/local/bin/hypermnesia' session-event"}]}],"Notification":[{"hooks":[{"type":"command","command":"'/usr/local/bin/hypermnesia' session-event"}]}]}}"#
+        try Data(v1.utf8).write(to: HookInstaller.settingsURL(projectPath: dir.path))
+        #expect(HookInstaller.needsReinstall(projectPath: dir.path))
+
+        // Re-install upgrades in place.
+        try HookInstaller.install(binaryPath: "/usr/local/bin/hypermnesia", projectPath: dir.path)
+        #expect(!HookInstaller.needsReinstall(projectPath: dir.path))
+
+        // No hooks at all is "not installed", not "needs update".
+        let empty = FileManager.default.temporaryDirectory.appendingPathComponent("ht-hooks-none-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: empty.appendingPathComponent(".claude"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: empty) }
+        #expect(!HookInstaller.needsReinstall(projectPath: empty.path))
     }
 
     @Test("Installers refuse to overwrite an unparseable settings file instead of clobbering it")

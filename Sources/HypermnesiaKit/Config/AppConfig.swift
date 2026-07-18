@@ -27,6 +27,16 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// and MCP `remember` writes always stay draft-gated regardless. Turn off for full review of
     /// every capture (see SECURITY.md for the trade-off).
     public var autoConfirmConfidentCaptures: Bool
+    /// Notch status: pop live session status (agent finished / needs you) below the Mac's notch,
+    /// with one click back to the session. Master switch — also gates the hook-side event emission.
+    public var notchEnabled: Bool
+    /// Pop when an agent finishes its turn (suppressed while that session's app is frontmost).
+    public var notchOnAgentFinish: Bool
+    /// Pop when a session is blocked on the user — a permission request or waiting for input.
+    public var notchOnNeedsAttention: Bool
+    /// Ambient presence: a slim "N working" strip hangs from the notch while agents are mid-turn
+    /// (hover to see the sessions). Never pops — it just exists.
+    public var notchShowWorking: Bool
 
     public init(
         classifier: String = "auto",
@@ -40,7 +50,11 @@ public struct AppConfig: Codable, Sendable, Equatable {
         autoConfirmAfterSightings: Int = 1,
         notifyOnNewDrafts: Bool = false,
         injectMomentum: Bool = true,
-        autoConfirmConfidentCaptures: Bool = true
+        autoConfirmConfidentCaptures: Bool = true,
+        notchEnabled: Bool = true,
+        notchOnAgentFinish: Bool = true,
+        notchOnNeedsAttention: Bool = true,
+        notchShowWorking: Bool = true
     ) {
         self.classifier = classifier
         self.geminiModel = geminiModel
@@ -54,6 +68,10 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.notifyOnNewDrafts = notifyOnNewDrafts
         self.injectMomentum = injectMomentum
         self.autoConfirmConfidentCaptures = autoConfirmConfidentCaptures
+        self.notchEnabled = notchEnabled
+        self.notchOnAgentFinish = notchOnAgentFinish
+        self.notchOnNeedsAttention = notchOnNeedsAttention
+        self.notchShowWorking = notchShowWorking
     }
 
     // Lenient decoding so older/newer config files keep working as fields evolve.
@@ -73,6 +91,11 @@ public struct AppConfig: Codable, Sendable, Equatable {
         injectMomentum = try c.decodeIfPresent(Bool.self, forKey: .injectMomentum) ?? d.injectMomentum
         autoConfirmConfidentCaptures = try c.decodeIfPresent(Bool.self, forKey: .autoConfirmConfidentCaptures)
             ?? d.autoConfirmConfidentCaptures
+        notchEnabled = try c.decodeIfPresent(Bool.self, forKey: .notchEnabled) ?? d.notchEnabled
+        notchOnAgentFinish = try c.decodeIfPresent(Bool.self, forKey: .notchOnAgentFinish) ?? d.notchOnAgentFinish
+        notchOnNeedsAttention = try c.decodeIfPresent(Bool.self, forKey: .notchOnNeedsAttention)
+            ?? d.notchOnNeedsAttention
+        notchShowWorking = try c.decodeIfPresent(Bool.self, forKey: .notchShowWorking) ?? d.notchShowWorking
     }
 }
 

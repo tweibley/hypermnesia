@@ -71,17 +71,31 @@ struct AntigravityInstallerTests {
         #expect(!AntigravityHookInstaller.isInstalled(projectPath: dir.path))
         try AntigravityHookInstaller.install(binaryPath: "/usr/local/bin/hypermnesia", projectPath: dir.path)
         #expect(AntigravityHookInstaller.isInstalled(projectPath: dir.path))
+        #expect(!AntigravityHookInstaller.needsReinstall(projectPath: dir.path))
 
         let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
         #expect(json["my-linter"] != nil)   // other hook preserved
         let ours = json["hypermnesia"] as! [String: Any]
         #expect(Set(ours.keys) == ["PreInvocation", "Stop"])
-        let hydrate = (ours["PreInvocation"] as! [[String: Any]]).first!
-        #expect(hydrate["type"] as? String == "command")
-        #expect(hydrate["command"] as? String == "'/usr/local/bin/hypermnesia' hydrate --client antigravity")
-        let capture = (ours["Stop"] as! [[String: Any]]).first!["command"] as! String
-        #expect(capture.contains("capture --client antigravity"))
-        #expect(capture.contains("drain"))
+        // PreInvocation hydrates AND heartbeats the notch working state.
+        let preCommands = (ours["PreInvocation"] as! [[String: Any]]).compactMap { $0["command"] as? String }
+        #expect(preCommands == ["'/usr/local/bin/hypermnesia' hydrate --client antigravity",
+                                "'/usr/local/bin/hypermnesia' session-event --client antigravity"])
+        let stopCommands = (ours["Stop"] as! [[String: Any]]).compactMap { $0["command"] as? String }
+        #expect(stopCommands.count == 2)
+        #expect(stopCommands.first?.contains("capture --client antigravity") == true)
+        #expect(stopCommands.first?.contains("drain") == true)
+        #expect(stopCommands.last == "'/usr/local/bin/hypermnesia' session-event --client antigravity")
+
+        // A notch-v1 config (session-event on Stop only) predates the working heartbeat.
+        var v1 = json
+        var v1Ours = ours
+        v1Ours["PreInvocation"] = [["type": "command", "command": "'/usr/local/bin/hypermnesia' hydrate --client antigravity"]]
+        v1["hypermnesia"] = v1Ours
+        try JSONSerialization.data(withJSONObject: v1).write(to: url)
+        #expect(AntigravityHookInstaller.needsReinstall(projectPath: dir.path))
+        try AntigravityHookInstaller.install(binaryPath: "/usr/local/bin/hypermnesia", projectPath: dir.path)
+        #expect(!AntigravityHookInstaller.needsReinstall(projectPath: dir.path))
 
         // Idempotent: re-install keeps exactly one of our key.
         try AntigravityHookInstaller.install(binaryPath: "/usr/local/bin/hypermnesia", projectPath: dir.path)
