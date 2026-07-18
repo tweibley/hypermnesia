@@ -113,10 +113,12 @@ struct MenuBarView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var updater = UpdaterModel.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             header
+            if let version = updater.availableUpdateVersion { updateCallout(version) }
             if model.draftCount > 0 { draftsCallout }
             if let injection = model.lastInjection {
                 // Proof the loop is closing: memory went INTO a session, not just out of one.
@@ -162,6 +164,32 @@ struct MenuBarView: View {
         let noun = count == 1 ? "memory" : "memories"
         if let project = model.selectedProject { return "\(projectDisplayName(project)) · \(count) \(noun)" }
         return "\(count) \(noun)"
+    }
+
+    // MARK: - Update call-to-action
+
+    /// A scheduled Sparkle check found an update; clicking hands off to the standard
+    /// user-initiated flow (which shows the release notes + install UI in focus).
+    private func updateCallout(_ version: String) -> some View {
+        Button {
+            updater.checkForUpdates()
+            dismiss()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "shippingbox.fill").frame(width: 18)
+                Text("Update available: \(version)")
+                    .fontWeight(.medium)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).opacity(0.8)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 2).padding(.bottom, 4)
     }
 
     // MARK: - Drafts call-to-action
