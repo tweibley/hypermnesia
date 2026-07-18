@@ -31,7 +31,7 @@ struct HypermnesiaCLI: AsyncParsableCommand {
                 Ask.self, Recall.self, Audit.self,
             ]),
             CommandGroup(name: "Capture", subcommands: [
-                Backfill.self, Drain.self, Hydrate.self, Capture.self, MCP.self,
+                Backfill.self, Drain.self, Hydrate.self, Capture.self, SessionEventHook.self, MCP.self,
             ]),
             CommandGroup(name: "Setup", subcommands: [
                 Setup.self, Doctor.self, InstallHooks.self, InstallMCP.self,
@@ -40,7 +40,7 @@ struct HypermnesiaCLI: AsyncParsableCommand {
                 InstallMemoryGuide.self, AllowTools.self,
             ]),
             CommandGroup(name: "Development", subcommands: [
-                Inspect.self, Classify.self, Seed.self, SeedMemories.self,
+                Inspect.self, Classify.self, Seed.self, SeedMemories.self, NotchDemo.self,
             ]),
         ]
     )
@@ -481,6 +481,110 @@ struct Capture: AsyncParsableCommand {
     }
 }
 
+/// `hypermnesia session-event` — a status hook (Stop / SessionEnd / Notification /
+/// UserPromptSubmit / per-tool heartbeats). Appends a live status event (working · agent finished
+/// · needs attention · session ended) to the session-event log the app's notch status display
+/// watches. Cheap and local: no store, no classifier, a bounded transcript head-read for the card
+/// label; heartbeat appends are throttled to one per session per 30s.
+struct SessionEventHook: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "session-event",
+        abstract: "Hook: record a live session status event for the notch status display."
+    )
+
+    @Option(name: .long, help: "Agent client whose hook schema to use: claude | cursor | antigravity (default: claude).")
+    var client: HookClient = .claude
+
+    func run() async throws {
+        let input = HookIO.readInput()
+        let ctx = HookContext.parse(input, client: client)
+        // Some hosts treat hook stdout as a protocol, so every exit path answers: Antigravity
+        // parses stdout as JSON on all its hooks (an empty decision never blocks a Stop and is a
+        // no-op elsewhere); Cursor's beforeSubmitPrompt must reply `{"continue": true}` or the
+        // user's prompt could be held. Claude paths stay silent — UserPromptSubmit stdout would
+        // be injected into the model's context.
+        defer {
+            if client == .antigravity {
+                FileHandle.standardOutput.write(Data(#"{"decision":""}"#.utf8))
+            } else if client == .cursor, ctx.event == "UserPromptSubmit" {
+                FileHandle.standardOutput.write(Data(#"{"continue":true}"#.utf8))
+            }
+        }
+        guard !HookIO.isDisabled else { return }
+        // The master switch lives in app config so turning the feature off also stops the writes.
+        guard AppConfigStore.load().notchEnabled else { return }
+
+        var kind: SessionEvent.Kind?
+        var isHeartbeat = false
+        switch ctx.event {
+        case "Notification": kind = .attention
+        case "Stop": kind = .finished
+        // Antigravity's "SessionEnd" means the agent went fully idle — that's a finish, not a
+        // closed window (conversations have no close signal there).
+        case "SessionEnd": kind = client == .antigravity ? .finished : .ended
+        // A submitted prompt starts a turn (Cursor's beforeSubmitPrompt normalizes to this).
+        case "UserPromptSubmit": kind = .working
+        // Antigravity's conversation start IS its first model call — a turn is beginning. For
+        // other clients SessionStart just means a window opened; nothing is running yet.
+        case "SessionStart": kind = client == .antigravity ? .working : nil
+        // Per-tool hooks: heartbeats proving the turn is still alive (and, right after a
+        // permission prompt is approved in the host, the signal that clears its attention card).
+        case "PostToolUse", "PreInvocation", "afterFileEdit", "afterShellExecution":
+            kind = .working
+            isHeartbeat = true
+        default: kind = nil
+        }
+        // A Cursor stop the user aborted isn't a "come look" moment — clear the session's cards
+        // silently rather than popping "finished" at the person who just pressed stop.
+        if client == .cursor, ctx.event == "Stop", (input["status"] as? String) == "aborted" {
+            kind = .ended
+        }
+        guard let kind else {
+            HookIO.debug("session-event (\(client.rawValue)) \(ctx.event): not a status event — skipping")
+            return
+        }
+        guard let sessionId = ctx.sessionId, !sessionId.isEmpty, let cwd = ctx.cwd, !cwd.isEmpty else {
+            HookIO.note("session-event (\(client.rawValue)) \(ctx.event) skipped — missing session id or cwd")
+            return
+        }
+
+        var startedAt: Date?
+        var title: String?
+        if kind == .working {
+            startedAt = Date()
+            title = ctx.prompt.flatMap { $0.isEmpty ? nil : SessionEventLog.condense($0, limit: 90) }
+            if isHeartbeat {
+                let recent = SessionEventLog.recent()
+                if SessionEventHeartbeat.throttled(events: recent, sessionId: sessionId) {
+                    HookIO.debug("session-event (\(client.rawValue)) \(ctx.event): heartbeat throttled")
+                    return
+                }
+                let inherited = SessionEventHeartbeat.inheritance(events: recent, sessionId: sessionId)
+                startedAt = inherited.startedAt ?? startedAt
+                title = title ?? inherited.title
+            }
+        }
+        if title == nil, kind != .ended {
+            title = ctx.transcriptPath.flatMap { SessionEventLog.quickTitle(transcriptPath: $0) }
+        }
+        let ancestors = ProcessAncestry.chain()
+        SessionEventLog.append(SessionEvent(
+            kind: kind,
+            startedAt: startedAt,
+            client: client.rawValue,
+            sessionId: sessionId,
+            projectId: ProjectIdentity.resolve(cwd: cwd),
+            cwd: cwd,
+            title: title,
+            message: input["message"] as? String,
+            hostPids: ancestors.map(\.pid),
+            hostPaths: ancestors.map(\.path),
+            tty: ProcessAncestry.controllingTerminal()
+        ))
+        HookIO.debug("session-event (\(client.rawValue)) \(ctx.event): \(kind.rawValue) for \(sessionId.prefix(8))")
+    }
+}
+
 /// `hypermnesia drain` — classify any queued sessions into memories. Run by the SessionEnd hook
 /// (backgrounded), the menu-bar app on a timer, or manually.
 struct Drain: AsyncParsableCommand {
@@ -562,6 +666,8 @@ struct InstallHooks: AsyncParsableCommand {
         print("Installed hooks into \(url.path)")
         print("  SessionStart / UserPromptSubmit → hydrate (inject memories as the session runs)")
         print("  Stop / SessionEnd               → capture + drain (build memory as the session runs)")
+        print("  UserPromptSubmit / PostToolUse / Stop / Notification")
+        print("                                  → session-event (live working/finished status for the app's notch display)")
         print("\nNew Claude Code sessions will now build and use memory continuously.")
     }
 
@@ -611,6 +717,8 @@ struct InstallCursorHooks: AsyncParsableCommand {
         print("Installed Cursor hooks into \(url.path)")
         print("  sessionStart       → hydrate (inject memories when a Cursor session starts)")
         print("  stop / sessionEnd  → capture + drain (build memory as the session runs)")
+        print("  beforeSubmitPrompt / afterFileEdit / afterShellExecution")
+        print("                     → session-event (live working/finished status for the app's notch display)")
         print("\nNew Cursor agent sessions will now build and use memory.")
         print("(If capture finds nothing, enable transcript export in Cursor so a transcript_path is provided.)")
     }
@@ -692,6 +800,7 @@ struct InstallAntigravityHooks: AsyncParsableCommand {
         print("Installed Antigravity hooks into \(url.path)")
         print("  PreInvocation (conversation start) → hydrate (inject memories)")
         print("  Stop                               → capture + drain (build memory as sessions end)")
+        print("  PreInvocation / Stop               → session-event (live working/finished status for the app's notch display)")
         print("\nNew Antigravity conversations will now build and use memory.")
     }
 }
@@ -1063,6 +1172,57 @@ struct Seed: AsyncParsableCommand {
         try store.upsert(nodes)
         print("Seeded \(nodes.count) sample memories into project \(project).")
         print("Run the app with:  swift run HypermnesiaApp")
+    }
+}
+
+/// `hypermnesia notch-demo` — pop sample cards in the app's notch status display, riding the real
+/// pipeline (log append → app watcher → reducer → panel). Clicking the cards exercises real
+/// jump-back into the terminal this command ran from.
+struct NotchDemo: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "notch-demo",
+        abstract: "Pop sample cards in the app's notch status display (UI preview)."
+    )
+
+    @Flag(name: .long, help: "Retract the sample cards instead of showing them.")
+    var clear = false
+
+    func run() async throws {
+        if clear {
+            for event in SessionEventDemo.clearEvents() { SessionEventLog.append(event) }
+            print("Cleared the sample cards.")
+            return
+        }
+        if !AppConfigStore.load().notchEnabled {
+            print("⚠ Notch status is turned off — enable it in Hypermnesia Settings → Notch, then re-run.")
+            return
+        }
+        // Same capture a real hook does, so clicking a card jumps back to THIS terminal tab.
+        let ancestors = ProcessAncestry.chain()
+        for event in SessionEventDemo.events(
+            hostPids: ancestors.map(\.pid), hostPaths: ancestors.map(\.path),
+            tty: ProcessAncestry.controllingTerminal()
+        ) {
+            SessionEventLog.append(event)
+        }
+        print("Appended 3 sample cards and 2 working sessions — they should pop from the notch now.")
+        print("Hover the panel to unfold the working rows; click any row to test jump-back (it returns here).")
+        print("Dismiss cards with the hover-× or `hypermnesia notch-demo --clear`.")
+        if ProcessAncestry.controllingTerminal() == nil {
+            print("⚠ No controlling terminal here, so clicking these sample cards can only focus the hosting app.")
+            print("  Run this from iTerm2/Terminal to feel the real jump-back-to-tab.")
+        }
+        if !Self.appLooksRunning() {
+            print("⚠ The Hypermnesia app doesn't seem to be running — launch it to see the cards.")
+        }
+    }
+
+    /// Installed bundle runs as "Hypermnesia"; a `swift run` dev build as "HypermnesiaApp".
+    private static func appLooksRunning() -> Bool {
+        ["Hypermnesia", "HypermnesiaApp"].contains { name in
+            !Shell.run("/usr/bin/pgrep", ["-x", name]).stdout
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 }
 
