@@ -70,4 +70,18 @@ struct TranscriptTests {
         // the last message should be retained
         #expect(convo.messages.last?.content.contains("tool error") == true)
     }
+
+    @Test("strict parser distinguishes valid-empty from bad input")
+    func strictValidity() throws {
+        #expect(try TranscriptParser.parseValidated(jsonl: "").isEmpty)
+        #expect(try TranscriptParser.parseValidated(
+            jsonl: #"{"type":"summary","summary":"bookkeeping only"}"#
+        ).isEmpty)
+        #expect(throws: TranscriptParseError.corrupt) {
+            try TranscriptParser.parseValidated(jsonl: "{not json")
+        }
+        #expect(throws: TranscriptParseError.unrecognized) {
+            try TranscriptParser.parseValidated(jsonl: #"{"foreign":"format"}"#)
+        }
+    }
 }

@@ -58,7 +58,7 @@ public enum ConflictEngine {
     /// un-superseded is never re-retired by the next sweep.
     @discardableResult
     public static func sweep(store: MemoryStore, projectId: String) -> Int {
-        let confirmed = ((try? store.nodes(projectId: projectId, status: .confirmed, limit: 2000)) ?? [])
+        let confirmed = ((try? store.allNodes(projectId: projectId, status: .confirmed)) ?? [])
             .filter { !$0.isSuperseded && !$0.isDeleted }
         let newestFirst = confirmed.sorted { $0.createdAt > $1.createdAt }
         var retired = Set<String>()

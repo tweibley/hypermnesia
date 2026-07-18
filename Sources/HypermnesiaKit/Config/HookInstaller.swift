@@ -54,7 +54,7 @@ public enum HookInstaller {
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
         let bin = ConfigFile.shellQuote(binaryPath)
         let hydrateCmd = "\(bin) hydrate"
-        let captureCmd = "\(bin) capture; (nohup \(bin) drain >/dev/null 2>&1 &)"
+        let captureCmd = HookDrainDiagnostics.captureCommand(binaryPath: binaryPath)
         let statusCmd = "\(bin) session-event"
         // SessionStart hydrates; UserPromptSubmit hydrates AND stamps the turn's start for the
         // notch working state. Status emitters are always their own hook command — Claude Code

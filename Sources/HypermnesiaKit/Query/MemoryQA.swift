@@ -8,7 +8,7 @@ public protocol Completer: Sendable {
 
 /// Picks a `Completer` from saved configuration (mirrors `Classifiers.makeFromConfig`).
 public enum Completers {
-    public static func makeFromConfig(_ config: AppConfig = AppConfigStore.load()) -> Completer {
+    public static func makeFromConfig(_ config: AppConfig = AppConfigStore.loadBestEffort()) -> Completer {
         switch Classifiers.Kind(rawValue: config.classifier) ?? .auto {
         case .gemini:
             return GeminiClassifier(apiKey: AppConfigStore.resolvedGeminiKey(config) ?? "", model: config.geminiModel)

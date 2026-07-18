@@ -8,7 +8,9 @@ public enum SessionIngestor {
     public enum Outcome: Sendable, Equatable {
         case captured(Int)   // succeeded (cursor advanced); N memories created
         case waiting         // nothing new yet (cursor unchanged)
-        case failed          // classifier/parse error — cursor NOT advanced, safe to retry
+        /// Classifier/parse/persist error — cursor NOT advanced. `terminal` means retry cannot help
+        /// (e.g. the transcript file is gone), so the queue should mark the row `.error` immediately.
+        case failed(reason: String, terminal: Bool)
     }
 
     static let maxAttempts = 5
@@ -43,17 +45,22 @@ public enum SessionIngestor {
         // the remaining slice so backfill doesn't re-extract (and re-dedup / spuriously re-confirm)
         // memories already captured live. A session with no cursor is backfilled whole, as before.
         let cursor = (try? store.cursor(sessionId: sessionId)) ?? 0
-        let parsedEvents = try? TranscriptParser.parse(fileAt: transcript)
+        let parsedEvents: [TranscriptEvent]
+        do {
+            parsedEvents = try TranscriptParser.parse(fileAt: transcript)
+        } catch {
+            return 0
+        }
         let convo: Conversation?
-        if cursor > 0, let events = parsedEvents {
-            guard events.count > cursor else {
+        if cursor > 0 {
+            guard parsedEvents.count > cursor else {
                 // Already fully captured live — just seal it, don't reclassify anything.
                 try? store.markProcessed(.init(sessionId: sessionId, projectId: projectId, source: source, memoryCount: 0))
                 return 0
             }
-            convo = ConversationBuilder.build(from: Array(events[cursor...]), sessionId: sessionId)
+            convo = ConversationBuilder.build(from: Array(parsedEvents[cursor...]), sessionId: sessionId)
         } else {
-            convo = try? ConversationBuilder.build(transcriptAt: transcript, sessionId: sessionId)
+            convo = ConversationBuilder.build(from: parsedEvents, sessionId: sessionId)
         }
         guard let convo, !convo.isEmpty else {
             try? store.markProcessed(.init(sessionId: sessionId, projectId: projectId, source: source, memoryCount: 0))
@@ -96,10 +103,11 @@ public enum SessionIngestor {
                 )
             )
         }
-        let config = AppConfigStore.load()
+        let config = AppConfigStore.loadBestEffort()
         let fresh = reconcile(nodes, projectId: projectId, store: store,
                               autoConfirm: config.autoConfirmAfterSightings,
-                              confirmConfident: config.autoConfirmConfidentCaptures)
+                              confirmConfident: config.autoConfirmConfidentCaptures,
+                              observationAt: when)
         do {
             // Persist BEFORE sealing. If the write fails (locked DB, full disk), the session must
             // stay unprocessed so a re-run retries it — sealing anyway would silently discard the
@@ -109,7 +117,7 @@ public enum SessionIngestor {
             return 0
         }
         // Advance the cursor to the full transcript so a later live/incremental drain sees nothing new.
-        if let events = parsedEvents { try? store.setCursor(sessionId: sessionId, projectId: projectId, count: events.count) }
+        try? store.setCursor(sessionId: sessionId, projectId: projectId, count: parsedEvents.count)
         try? store.markProcessed(.init(sessionId: sessionId, projectId: projectId, source: source, memoryCount: fresh.count))
         if !fresh.isEmpty {
             MemoryActivityLog.append(.init(
@@ -135,9 +143,18 @@ public enum SessionIngestor {
         store: MemoryStore,
         minNewEvents: Int = 6,
         isFinal: Bool = false,
-        commitSha: String? = nil
+        commitSha: String? = nil,
+        source: CaptureSource = .live
     ) async -> Outcome {
-        guard let events = try? TranscriptParser.parse(fileAt: transcript) else { return .failed }
+        let events: [TranscriptEvent]
+        do {
+            events = try TranscriptParser.parse(fileAt: transcript)
+        } catch {
+            if !FileManager.default.fileExists(atPath: transcript.path) {
+                return .failed(reason: "transcript missing", terminal: true)
+            }
+            return .failed(reason: "transcript unreadable", terminal: false)
+        }
         let cursor = (try? store.cursor(sessionId: sessionId)) ?? 0
         guard events.count > cursor else { return .waiting }
 
@@ -157,7 +174,8 @@ public enum SessionIngestor {
         do {
             rawMemories = try await classifier.classify(convo, recentMemories: recent)
         } catch {
-            return .failed   // do NOT advance the cursor — these events will be retried
+            // do NOT advance the cursor — these events will be retried
+            return .failed(reason: "classification failed", terminal: false)
         }
 
         // ── Validation gate: filter degenerate captures, cap confidence on weak ones ──────────
@@ -178,16 +196,18 @@ public enum SessionIngestor {
         }
 
         let when = convo.endedAt ?? Date()
+        let observationAt = source == .backfill ? when : Date()
         let nodes = memories.map {
             DecayEngine.decayed($0.toDraftNode(
                 projectId: projectId, sessionId: sessionId, createdAt: when,
                 commitSha: commitSha, branch: convo.gitBranch, status: .draft
             ))
         }
-        let config = AppConfigStore.load()
+        let config = AppConfigStore.loadBestEffort()
         let fresh = reconcile(nodes, projectId: projectId, store: store,
                               autoConfirm: config.autoConfirmAfterSightings,
-                              confirmConfident: config.autoConfirmConfidentCaptures)
+                              confirmConfident: config.autoConfirmConfidentCaptures,
+                              observationAt: observationAt)
         do {
             // Persist BEFORE advancing the cursor: a failed write must leave the slice retryable
             // (.failed), not silently skipped. If the cursor write fails after a successful upsert,
@@ -196,7 +216,7 @@ public enum SessionIngestor {
             try store.upsert(fresh)
             try store.setCursor(sessionId: sessionId, projectId: projectId, count: events.count)
         } catch {
-            return .failed
+            return .failed(reason: "persist failed", terminal: false)
         }
         if !fresh.isEmpty {
             MemoryActivityLog.append(.init(
@@ -205,7 +225,7 @@ public enum SessionIngestor {
                 eventType: .capture,
                 memoryIds: fresh.map(\.id),
                 count: fresh.count,
-                metadata: ["source": CaptureSource.live.rawValue]
+                metadata: ["source": source.rawValue]
             ))
         }
         return .captured(fresh.count)
@@ -245,7 +265,7 @@ public enum SessionIngestor {
         var total = 0
         var failures = 0
         var touchedProjects = Set<String>()
-        let threshold = AppConfigStore.load().captureThreshold
+        let threshold = AppConfigStore.loadBestEffort().captureThreshold
         let pending = (try? store.pendingCaptures(limit: max(0, limit))) ?? []
         var processed = 0
         for stale in pending {
@@ -263,7 +283,7 @@ public enum SessionIngestor {
                 transcript: URL(fileURLWithPath: item.transcriptPath),
                 sessionId: item.sessionId, projectId: item.projectId,
                 classifier: classifier, store: store, minNewEvents: threshold,
-                isFinal: item.isFinal, commitSha: item.gitSha
+                isFinal: item.isFinal, commitSha: item.gitSha, source: item.source
             )
 
             switch outcome {
@@ -271,37 +291,50 @@ public enum SessionIngestor {
                 // Only seal the session if our completion actually landed (the row was still
                 // .processing — no concurrent re-enqueue of a newer final slice) and this was final.
                 let landed = (try? store.finishProcessing(id: item.id, status: .done)) ?? false
+                if landed {
+                    TranscriptSnapshotStore.removeIfManaged(item.transcriptPath)
+                }
                 if landed && item.isFinal {
                     try? store.markProcessed(.init(
-                        sessionId: item.sessionId, projectId: item.projectId, source: .live, memoryCount: count
+                        sessionId: item.sessionId, projectId: item.projectId, source: item.source, memoryCount: count
                     ))
                 }
                 total += count
                 if count > 0 { touchedProjects.insert(item.projectId) }
             case .waiting:
                 let landed = (try? store.finishProcessing(id: item.id, status: .done)) ?? false
+                if landed {
+                    TranscriptSnapshotStore.removeIfManaged(item.transcriptPath)
+                }
                 // Nothing new to capture. If this was the *final* flush, the session is fully
                 // captured — seal it so backfill / "Process previous sessions" don't rediscover and
                 // re-classify it forever. A non-final Stop just waits for a later re-enqueue.
                 if landed && item.isFinal {
                     try? store.markProcessed(.init(
-                        sessionId: item.sessionId, projectId: item.projectId, source: .live, memoryCount: 0
+                        sessionId: item.sessionId, projectId: item.projectId, source: item.source, memoryCount: 0
                     ))
                 }
-            case .failed:
+            case .failed(let reason, let terminal):
                 failures += 1
-                // Leave pending to retry next drain; give up after a few attempts so it can't loop forever.
-                if attempts >= maxAttempts {
-                    _ = try? store.finishProcessing(id: item.id, status: .error, lastError: "classification failed \(attempts)×")
+                // Missing transcripts (and other terminal failures) won't recover on retry — mark
+                // them error immediately. Transient classifier failures stay pending until the attempt
+                // budget is exhausted.
+                if terminal || attempts >= maxAttempts {
+                    let message = terminal
+                        ? reason
+                        : "\(reason) \(attempts)×"
+                    _ = try? store.finishProcessing(id: item.id, status: .error, lastError: message)
                 } else {
-                    _ = try? store.finishProcessing(id: item.id, status: .pending)
+                    _ = try? store.finishProcessing(
+                        id: item.id, status: .pending,
+                        lastError: "\(reason) (attempt \(attempts) of \(maxAttempts))")
                 }
             }
         }
         // Re-triage the draft backlog through the auto-confirm policy (drafts predating the policy
         // settle on the first pass), then reconcile conflicts among the confirmed set — newly
         // confirmed memories may contradict older ones.
-        let confirmConfident = AppConfigStore.load().autoConfirmConfidentCaptures
+        let confirmConfident = AppConfigStore.loadBestEffort().autoConfirmConfidentCaptures
         for projectId in (try? store.projects()) ?? [] {
             if retriageDrafts(store: store, projectId: projectId, confirmConfident: confirmConfident) > 0 {
                 touchedProjects.insert(projectId)
@@ -322,7 +355,7 @@ public enum SessionIngestor {
     @discardableResult
     public static func retriageDrafts(store: MemoryStore, projectId: String, confirmConfident: Bool) -> Int {
         guard confirmConfident else { return 0 }
-        let drafts = (try? store.nodes(projectId: projectId, status: .draft, limit: 2000)) ?? []
+        let drafts = (try? store.allNodes(projectId: projectId, status: .draft)) ?? []
         var confirmed = 0
         for draft in drafts {
             guard draft.conversationId != nil,
@@ -378,11 +411,15 @@ public enum SessionIngestor {
 
     static func reconcile(
         _ nodes: [MemoryNode], projectId: String, store: MemoryStore, autoConfirm: Int,
-        confirmConfident: Bool = false
+        confirmConfident: Bool = false, observationAt: Date = Date()
     ) -> [MemoryNode] {
-        var pool = (try? store.nodes(projectId: projectId, limit: 500)) ?? []
+        var pools: [MemoryType: [MemoryNode]] = [:]
+        for type in Set(nodes.map(\.type)) {
+            pools[type] = (try? store.allNodes(projectId: projectId, type: type)) ?? []
+        }
         var fresh: [MemoryNode] = []
         for node in nodes {
+            var pool = pools[node.type] ?? []
             guard let dup = DedupEngine.duplicate(of: node, in: pool) else {
                 // Genuinely new — but it may *contradict* an existing memory (a revised decision,
                 // a fact whose value changed). Link the revision on the draft; the old memory is
@@ -400,13 +437,14 @@ public enum SessionIngestor {
                 }
                 fresh.append(node)
                 pool.append(node)
+                pools[node.type] = pool
                 continue
             }
             guard var existing = try? store.node(id: dup.id) else { continue }
             existing.timesApplied += 1                 // legacy counter (auto-confirm + legacy decay)
             existing.timesSighted += 1                 // explicit: a repeat *sighting*, not an application
-            existing.lastValidatedAt = Date()
-            existing.updatedAt = Date()
+            existing.lastValidatedAt = observationAt
+            existing.updatedAt = observationAt
             // Deliberately do NOT reset confidence — that would silently undo an audit penalty. A
             // repeat sighting auto-confirms a draft after `autoConfirm` reinforcements.
             if existing.status == .draft, autoConfirm > 0, existing.timesApplied >= autoConfirm {
@@ -416,6 +454,7 @@ public enum SessionIngestor {
             // Auto-confirm is a confirm path: a draft that carried a revision link now supersedes.
             ConflictEngine.applySupersede(for: existing, store: store)
             if let index = pool.firstIndex(where: { $0.id == existing.id }) { pool[index] = existing }
+            pools[node.type] = pool
         }
         return fresh
     }

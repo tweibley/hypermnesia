@@ -27,6 +27,7 @@ cp "$BUILD_DIR/hypermnesia"    "$APP/Contents/Resources/hypermnesia"   # bundled
 # Sparkle (auto-update) — linked via @rpath ../Frameworks; SPM stages it next to the binary.
 ditto "$BUILD_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 cp LICENSE THIRD-PARTY-LICENSES.md "$APP/Contents/Resources/"
+cp packaging/icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # Sparkle feed wiring goes into Info.plist only when the public signing key is checked in
 # (packaging/sparkle-public-ed-key.txt, printed by Sparkle's `generate_keys -p`). Without it
@@ -51,6 +52,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>Hypermnesia</string>
   <key>CFBundleExecutable</key><string>Hypermnesia</string>
   <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${VERSION}</string>

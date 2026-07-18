@@ -31,7 +31,7 @@ public enum MemoryAuditor {
     public static func audit(
         store: MemoryStore, projectId: String, repoPath: String, status: MemoryStatus? = .confirmed
     ) -> [AuditFinding] {
-        let nodes = (try? store.nodes(projectId: projectId, status: status, limit: 2000)) ?? []
+        let nodes = (try? store.allNodes(projectId: projectId, status: status)) ?? []
         let head = ProjectIdentity.headSha(cwd: repoPath)
         var findings: [AuditFinding] = []
 
@@ -59,7 +59,7 @@ public enum MemoryAuditor {
         store: MemoryStore, projectId: String, repoPath: String, completer: Completer,
         status: MemoryStatus? = .confirmed, limit: Int = 25
     ) async -> [AuditFinding] {
-        let nodes = ((try? store.nodes(projectId: projectId, status: status, limit: 2000)) ?? [])
+        let nodes = ((try? store.allNodes(projectId: projectId, status: status)) ?? [])
             .filter { !$0.data.relatedFiles.isEmpty }
             .prefix(limit)
 
@@ -130,15 +130,18 @@ public enum MemoryAuditor {
 
     // MARK: - Outcome instrumentation (belief evidence)
 
-    /// Translate a deterministic reality-check into belief evidence (the coarse audit-based proxy):
+    /// Translate the complete finding set from one audit pass into belief evidence:
     /// a confirmed memory with related files that are all present & unchanged is **corroborated**
-    /// (a non-recapture corroborator → `timesAppliedSuccess`); one with a missing/changed file has
-    /// **drifted** (→ `timesOverridden`, which drives belief down fast). Memories without related
-    /// files are skipped (no code signal). Returns the counts touched.
+    /// (a non-recapture corroborator → `timesAppliedSuccess`); one with any deterministic or deep
+    /// finding has **drifted** (→ `timesOverridden`, which drives belief down fast). Callers must pass
+    /// the same findings they apply, so an OUTDATED result cannot be contradicted by a second,
+    /// deterministic-only audit in the same pass. Memories without related files are skipped.
     @discardableResult
-    public static func recordOutcomes(store: MemoryStore, projectId: String, repoPath: String) -> (corroborated: Int, drifted: Int) {
-        let flagged = Set(audit(store: store, projectId: projectId, repoPath: repoPath).map(\.nodeId))
-        let nodes = ((try? store.nodes(projectId: projectId, status: .confirmed, limit: 2000)) ?? [])
+    public static func recordOutcomes(
+        _ findings: [AuditFinding], store: MemoryStore, projectId: String
+    ) -> (corroborated: Int, drifted: Int) {
+        let flagged = Set(findings.map(\.nodeId))
+        let nodes = ((try? store.allNodes(projectId: projectId, status: .confirmed)) ?? [])
             .filter { !$0.data.relatedFiles.isEmpty }
         var corroborated = 0, drifted = 0
         for node in nodes {

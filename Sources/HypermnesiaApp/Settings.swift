@@ -19,9 +19,14 @@ final class SettingsModel {
 
     var config: AppConfig {
         didSet {
-            AppConfigStore.save(config)
-            // Let live surfaces (the notch status display) react now, not on their next poll.
-            NotificationCenter.default.post(name: .hypermnesiaConfigChanged, object: nil)
+            do {
+                try AppConfigStore.save(config)
+                configPersistenceError = nil
+                // Let live surfaces (the notch status display) react now, not on their next poll.
+                NotificationCenter.default.post(name: .hypermnesiaConfigChanged, object: nil)
+            } catch {
+                configPersistenceError = error.localizedDescription
+            }
         }
     }
     var hooksInstalled: Bool
@@ -35,6 +40,7 @@ final class SettingsModel {
     var antigravityHooksInstalled: Bool
     var antigravityMCPInstalled: Bool
     var statusMessage: String?
+    var configPersistenceError: String?
 
     var recallPathInstalled: Bool { recallGuideInstalled && recallPermissionsInstalled }
     var mcpServerRegistered: Bool {
@@ -62,7 +68,12 @@ final class SettingsModel {
     }
 
     init() {
-        config = AppConfigStore.load()
+        do {
+            config = try AppConfigStore.load()
+        } catch {
+            config = AppConfig()
+            configPersistenceError = error.localizedDescription
+        }
         hooksInstalled = HookInstaller.isInstalled()
         recallGuideInstalled = MemoryGuideInstaller.isInstalled()
         recallPermissionsInstalled = PermissionInstaller.isInstalled()
@@ -437,6 +448,12 @@ struct SettingsView: View {
                     case .notch: NotchSettings(model: model)
                     case .storage: StorageSettings()
                     case .about: AboutSettings(model: model)
+                    }
+                    if let error = model.configPersistenceError {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                            .textSelection(.enabled)
                     }
                     if let status = model.statusMessage {
                         Label(status, systemImage: "info.circle")

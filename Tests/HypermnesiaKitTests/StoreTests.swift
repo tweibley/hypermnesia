@@ -169,6 +169,70 @@ struct StoreTests {
         #expect(try store.pendingCaptures().isEmpty)
     }
 
+    @Test("capture queue health separates pending, processing, retries, and terminal errors")
+    func captureQueueHealth() throws {
+        let store = try makeStore()
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        try store.enqueue(.init(
+            sessionId: "pending", projectId: "p", transcriptPath: "/pending", cwd: "/repo",
+            enqueuedAt: base, status: .pending, attempts: 0))
+        try store.enqueue(.init(
+            sessionId: "retry", projectId: "p", transcriptPath: "/retry", cwd: "/repo",
+            enqueuedAt: base.addingTimeInterval(1), status: .pending, attempts: 2,
+            lastError: "temporary classifier failure"))
+        try store.enqueue(.init(
+            sessionId: "processing", projectId: "p", transcriptPath: "/processing", cwd: "/repo",
+            enqueuedAt: base.addingTimeInterval(2), status: .processing, attempts: 1))
+        try store.enqueue(.init(
+            sessionId: "failed", projectId: "p", transcriptPath: "/failed", cwd: "/repo",
+            enqueuedAt: base.addingTimeInterval(3), status: .error, attempts: 5,
+            lastError: "classification failed 5×"))
+        try store.enqueue(.init(
+            sessionId: "done", projectId: "p", transcriptPath: "/done", cwd: "/repo",
+            enqueuedAt: base.addingTimeInterval(4), status: .done))
+
+        let health = try store.captureQueueHealth()
+
+        #expect(health.pending == 1)
+        #expect(health.processing == 1)
+        #expect(health.retrying == 1)
+        #expect(health.terminalErrors == 1)
+        #expect(health.lastError?.sessionId == "failed")
+        #expect(health.lastError?.message == "classification failed 5×")
+    }
+
+    @Test("clearing failed captures preserves active rows, memories, and host transcripts")
+    func clearFailedCaptures() throws {
+        let store = try makeStore()
+        let support = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hypermnesia-clear-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: support) }
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        let source = support.appendingPathComponent("host.jsonl")
+        try "transcript".write(to: source, atomically: true, encoding: .utf8)
+        let managed = try TranscriptSnapshotStore.snapshot(
+            transcript: source, sessionId: "failed-managed", in: support)
+        let memory = sampleNode(title: "Keep me")
+        try store.upsert(memory)
+        try store.enqueue(.init(
+            sessionId: "failed-managed", projectId: "p", transcriptPath: managed.path,
+            cwd: "/repo", status: .error, attempts: 5))
+        try store.enqueue(.init(
+            sessionId: "failed-host", projectId: "p", transcriptPath: source.path,
+            cwd: "/repo", status: .error, attempts: 5))
+        try store.enqueue(.init(
+            sessionId: "pending", projectId: "p", transcriptPath: source.path,
+            cwd: "/repo", status: .pending))
+
+        #expect(try store.clearFailedCaptures(supportDirectory: support) == 2)
+
+        #expect(try store.captureQueueHealth().pending == 1)
+        #expect(try store.captureQueueHealth().terminalErrors == 0)
+        #expect(try store.node(id: memory.id) != nil)
+        #expect(FileManager.default.fileExists(atPath: source.path))
+        #expect(!FileManager.default.fileExists(atPath: managed.path))
+    }
+
     @Test("processed sessions are idempotent")
     func processedSessions() throws {
         let store = try makeStore()

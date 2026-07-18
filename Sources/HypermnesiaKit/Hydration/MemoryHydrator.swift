@@ -32,7 +32,7 @@ public enum MemoryHydrator {
     public static func relevantMemories(
         store: MemoryStore, projectId: String, options: Options = Options()
     ) -> [MemoryNode] {
-        let confirmed = (try? store.nodes(projectId: projectId, status: .confirmed, limit: 300)) ?? []
+        let confirmed = (try? store.allNodes(projectId: projectId, status: .confirmed)) ?? []
         let decayed: [MemoryNode] = confirmed.map { DecayEngine.decayed($0) }
         let eligible = decayed.filter { !$0.isSuperseded && $0.confidence >= options.minConfidence }
         let ranked = eligible.sorted { a, b in
@@ -71,7 +71,7 @@ public enum MemoryHydrator {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 3 else { return nil }
 
-        let pool = ((try? store.nodes(projectId: projectId, status: .confirmed, limit: 300)) ?? [])
+        let pool = ((try? store.allNodes(projectId: projectId, status: .confirmed)) ?? [])
             .map { DecayEngine.decayed($0) }
             .filter { !$0.isSuperseded && $0.confidence >= 0.50 }
         guard !pool.isEmpty else { return nil }

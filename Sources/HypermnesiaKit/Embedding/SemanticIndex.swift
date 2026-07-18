@@ -33,7 +33,7 @@ public enum SemanticIndex {
     public static func indexMissing(
         store: MemoryStore, embedder: Embedder, projectId: String, status: MemoryStatus? = nil
     ) -> Int {
-        let missing = (try? store.nodesMissingEmbedding(
+        let missing = (try? store.allNodesMissingEmbedding(
             projectId: projectId, model: embedder.identifier, status: status
         )) ?? []
         var indexed = 0

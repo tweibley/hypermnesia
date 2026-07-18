@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Testing
 @testable import HypermnesiaKit
 
@@ -20,6 +21,49 @@ struct ConfigTests {
         #expect(partial.classifier == "claude")
         #expect(partial.maxMemoriesInjected == 40)
         #expect(partial.injectAtSessionStart == true)
+    }
+
+    @Test("AppConfigStore reports corrupt existing config instead of silently defaulting")
+    func corruptAppConfigIsObservable() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ht-app-config-corrupt-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("config.json")
+        let corrupt = "{not valid json"
+        try corrupt.write(to: url, atomically: true, encoding: .utf8)
+
+        #expect(throws: AppConfigLoadError.self) {
+            try AppConfigStore.load(from: url)
+        }
+        var diagnostic = ""
+        #expect(AppConfigStore.loadBestEffort(from: url) { diagnostic = $0 } == AppConfig())
+        #expect(diagnostic.contains("invalid JSON"))
+        #expect(try String(contentsOf: url, encoding: .utf8) == corrupt)
+    }
+
+    @Test("AppConfigStore atomically replaces config with private permissions")
+    func atomicPrivateAppConfigSave() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ht-app-config-save-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("nested/config.json")
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "old partial content".write(to: url, atomically: true, encoding: .utf8)
+
+        var config = AppConfig()
+        config.classifier = "gemini"
+        config.geminiApiKey = "private-key"
+        try AppConfigStore.save(config, to: url)
+
+        #expect(try AppConfigStore.load(from: url) == config)
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        let permissions = try #require(attributes[.posixPermissions] as? NSNumber).intValue
+        #expect(permissions & 0o777 == 0o600)
+        let siblings = try FileManager.default.contentsOfDirectory(
+            at: url.deletingLastPathComponent(), includingPropertiesForKeys: nil)
+        #expect(siblings.map(\.lastPathComponent) == ["config.json"])
     }
 
     @Test("HookInstaller installs all five events, preserves other settings, and uninstalls cleanly")
@@ -165,6 +209,60 @@ struct ConfigTests {
         let antigravityHook = antigravity["hypermnesia"] as! [String: Any]
         let antigravityCmd = (antigravityHook["PreInvocation"] as! [[String: Any]]).first!["command"] as! String
         #expect(antigravityCmd == "'/Users/Jane Smith/.local/bin/hypermnesia' hydrate --client antigravity")
+    }
+
+    @Test("all hook installers use the shared logged background drain command")
+    func loggedDrainCommands() throws {
+        let binary = "/Users/Jane Smith/bin/hypermnesia"
+        let quoted = "'/Users/Jane Smith/bin/hypermnesia'"
+
+        let claude = HookInstaller.merged(into: [:], binaryPath: binary)
+        let claudeHooks = claude["hooks"] as! [String: Any]
+        let claudeStop = (claudeHooks["Stop"] as! [[String: Any]]).last!
+        let claudeCommands = (claudeStop["hooks"] as! [[String: Any]]).compactMap { $0["command"] as? String }
+        #expect(claudeCommands.first
+                == "\(quoted) capture; (nohup \(quoted) drain --hook-background &)")
+
+        let cursor = CursorHookInstaller.merged(into: [:], binaryPath: binary)
+        let cursorHooks = cursor["hooks"] as! [String: Any]
+        let cursorCommands = (cursorHooks["stop"] as! [[String: Any]]).compactMap { $0["command"] as? String }
+        #expect(cursorCommands.first
+                == "\(quoted) capture --client cursor; (nohup \(quoted) drain --hook-background &)")
+
+        let antigravity = AntigravityHookInstaller.merged(into: [:], binaryPath: binary)
+        let antigravityHook = antigravity["hypermnesia"] as! [String: Any]
+        let antigravityCommands = (antigravityHook["Stop"] as! [[String: Any]])
+            .compactMap { $0["command"] as? String }
+        #expect(antigravityCommands.first
+                == "\(quoted) capture --client antigravity; (nohup \(quoted) drain --hook-background &)")
+
+        #expect((claudeCommands + cursorCommands + antigravityCommands)
+            .allSatisfy { !$0.contains("/dev/null") })
+    }
+
+    @Test("background drain log rotates at the cap with private permissions")
+    func drainLogRotation() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ht-drain-log-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let active = directory.appendingPathComponent("drain.log")
+        let old = Data(repeating: 0x41, count: 32)
+        try old.write(to: active)
+
+        let fd = try HookDrainDiagnostics.prepareLogFile(in: directory, maxBytes: 16)
+        close(fd)
+
+        #expect(try Data(contentsOf: directory.appendingPathComponent("drain.log.1")) == old)
+        #expect(try Data(contentsOf: active).isEmpty)
+        let directoryMode = try #require(
+            FileManager.default.attributesOfItem(atPath: directory.path)[.posixPermissions] as? NSNumber
+        ).intValue
+        let logMode = try #require(
+            FileManager.default.attributesOfItem(atPath: active.path)[.posixPermissions] as? NSNumber
+        ).intValue
+        #expect(directoryMode & 0o777 == 0o700)
+        #expect(logMode & 0o777 == 0o600)
     }
 
     @Test("PermissionInstaller pre-approves only the read-only tools, idempotently, preserving existing rules")

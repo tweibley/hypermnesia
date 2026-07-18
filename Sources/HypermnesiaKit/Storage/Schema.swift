@@ -193,6 +193,13 @@ enum Schema {
                 """)
         }
 
+        // v8: queued historical sessions retain backfill semantics through the shared drainer.
+        migrator.registerMigration("v8-capture-source") { db in
+            try db.alter(table: "capture_queue") { t in
+                t.add(column: "source", .text).notNull().defaults(to: CaptureSource.live.rawValue)
+            }
+        }
+
         return migrator
     }
 }

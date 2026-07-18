@@ -276,6 +276,16 @@ struct MenuBarView: View {
             if let status = model.processingStatus {
                 Text(status).font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.bottom, 2)
             }
+            if model.captureQueueHealth.hasActivity || model.captureQueueHealth.hasErrors {
+                let health = model.captureQueueHealth
+                Text("Queue: \(health.pending) pending · \(health.processing) processing · "
+                     + "\(health.retrying) retrying · \(health.terminalErrors) failed")
+                    .font(.caption2)
+                    .foregroundStyle(health.hasErrors ? Color.red : Color.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 2)
+                    .help(health.lastError?.message ?? "Capture queue health")
+            }
             Divider().padding(.vertical, 5).padding(.horizontal, 6)
             if UpdaterModel.shared.isAvailable {
                 Button {

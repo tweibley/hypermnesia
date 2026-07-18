@@ -176,7 +176,7 @@ public enum Classifiers {
     }
 
     /// Build the classifier from saved configuration (the default path for the app + hooks).
-    public static func makeFromConfig(_ config: AppConfig = AppConfigStore.load()) -> Classifier {
+    public static func makeFromConfig(_ config: AppConfig = AppConfigStore.loadBestEffort()) -> Classifier {
         switch Kind(rawValue: config.classifier) ?? .auto {
         case .gemini:
             return GeminiClassifier(apiKey: AppConfigStore.resolvedGeminiKey(config) ?? "", model: config.geminiModel)
@@ -194,7 +194,7 @@ public enum Classifiers {
     /// saved app config, but the Gemini key is always taken from config **or** environment — so a key
     /// stored only in the app's Settings still works from the hook-driven `drain`/`backfill`/`classify`.
     public static func forCLI(
-        classifier flag: String?, model: String?, config: AppConfig = AppConfigStore.load()
+        classifier flag: String?, model: String?, config: AppConfig = AppConfigStore.loadBestEffort()
     ) -> Classifier {
         let kind = flag.flatMap { Kind(rawValue: $0) } ?? Kind(rawValue: config.classifier) ?? .auto
         switch kind {
@@ -211,7 +211,7 @@ public enum Classifiers {
     }
 
     /// What `forCLI` will resolve to, for progress output.
-    public static func cliDescription(classifier flag: String?, config: AppConfig = AppConfigStore.load()) -> String {
+    public static func cliDescription(classifier flag: String?, config: AppConfig = AppConfigStore.loadBestEffort()) -> String {
         let kind = flag.flatMap { Kind(rawValue: $0) } ?? Kind(rawValue: config.classifier) ?? .auto
         switch kind {
         case .gemini: return "gemini (\(config.geminiModel))"

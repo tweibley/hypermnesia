@@ -362,6 +362,41 @@ struct DetailView: View {
                     .padding(.horizontal, 10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+                if model.captureQueueHealth.hasActivity || model.captureQueueHealth.hasErrors {
+                    let health = model.captureQueueHealth
+                    HStack(spacing: 8) {
+                        Image(systemName: health.hasErrors
+                              ? "exclamationmark.triangle.fill" : "tray.and.arrow.down.fill")
+                            .foregroundStyle(health.hasErrors ? Color.red : Color.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Capture queue: \(health.pending) pending, \(health.processing) processing, "
+                                 + "\(health.retrying) retrying, \(health.terminalErrors) failed")
+                                .font(.callout)
+                            if let failure = health.lastError {
+                                Text("\(failure.sessionId.prefix(8)): \(failure.message)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        if health.terminalErrors > 0 {
+                            Button("Clear failed", role: .destructive) {
+                                model.clearFailedCaptures()
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Remove failed queue entries; memories and source transcripts are unchanged")
+                        }
+                        Button { model.refreshQueueHealth() } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Refresh capture queue health")
+                    }
+                    .padding(10)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 10)
+                }
                 if let actionError = model.lastActionError {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -436,14 +471,14 @@ struct DetailView: View {
             }
         }
         .confirmationDialog(
-            "Classify \(model.backfillProposal ?? 0) past session\((model.backfillProposal ?? 0) == 1 ? "" : "s")?",
+            "Classify \(model.backfillProposal?.count ?? 0) past session\((model.backfillProposal?.count ?? 0) == 1 ? "" : "s")?",
             isPresented: Binding(
                 get: { model.backfillProposal != nil },
                 set: { if !$0, model.backfillProposal != nil { model.cancelBackfill() } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Classify \(model.backfillProposal ?? 0) session\((model.backfillProposal ?? 0) == 1 ? "" : "s")") {
+            Button("Classify \(model.backfillProposal?.count ?? 0) session\((model.backfillProposal?.count ?? 0) == 1 ? "" : "s")") {
                 model.confirmBackfill()
             }
             Button("Cancel", role: .cancel) { model.cancelBackfill() }

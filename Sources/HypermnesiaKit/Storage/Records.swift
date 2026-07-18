@@ -50,6 +50,8 @@ public struct CaptureQueueItem: Codable, Identifiable, Sendable, Hashable, Fetch
     public var lastError: String?
     /// True once the session has ended — drain flushes the remaining slice regardless of threshold.
     public var isFinal: Bool
+    /// Live hook capture or user-confirmed historical replay.
+    public var source: CaptureSource
 
     public init(
         id: String = UUID().uuidString,
@@ -63,7 +65,8 @@ public struct CaptureQueueItem: Codable, Identifiable, Sendable, Hashable, Fetch
         status: CaptureStatus = .pending,
         attempts: Int = 0,
         lastError: String? = nil,
-        isFinal: Bool = false
+        isFinal: Bool = false,
+        source: CaptureSource = .live
     ) {
         self.id = id
         self.sessionId = sessionId
@@ -77,7 +80,50 @@ public struct CaptureQueueItem: Codable, Identifiable, Sendable, Hashable, Fetch
         self.attempts = attempts
         self.lastError = lastError
         self.isFinal = isFinal
+        self.source = source
     }
+}
+
+public struct CaptureQueueFailure: Sendable, Equatable {
+    public let sessionId: String
+    public let projectId: String
+    public let attempts: Int
+    public let message: String
+    public let date: Date
+
+    public init(sessionId: String, projectId: String, attempts: Int, message: String, date: Date) {
+        self.sessionId = sessionId
+        self.projectId = projectId
+        self.attempts = attempts
+        self.message = message
+        self.date = date
+    }
+}
+
+/// Current capture queue health, split so fresh work, active work, retries, and terminal failures
+/// are independently observable by the app and `doctor`.
+public struct CaptureQueueHealth: Sendable, Equatable {
+    public let pending: Int
+    public let processing: Int
+    public let retrying: Int
+    public let terminalErrors: Int
+    public let lastError: CaptureQueueFailure?
+
+    public init(
+        pending: Int, processing: Int, retrying: Int, terminalErrors: Int,
+        lastError: CaptureQueueFailure?
+    ) {
+        self.pending = pending
+        self.processing = processing
+        self.retrying = retrying
+        self.terminalErrors = terminalErrors
+        self.lastError = lastError
+    }
+
+    public static let empty = CaptureQueueHealth(
+        pending: 0, processing: 0, retrying: 0, terminalErrors: 0, lastError: nil)
+    public var hasActivity: Bool { pending + processing + retrying > 0 }
+    public var hasErrors: Bool { terminalErrors > 0 }
 }
 
 /// Per-session capture cursor — how many transcript events have already been turned into memories.

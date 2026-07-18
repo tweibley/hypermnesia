@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// User-editable configuration, shared by the app (Settings UI) and the CLI/hooks. Stored as JSON
 /// at `~/Library/Application Support/Hypermnesia/config.json` (0600 — it may hold an API key).
@@ -99,27 +100,152 @@ public struct AppConfig: Codable, Sendable, Equatable {
     }
 }
 
+public enum AppConfigLoadError: Error, Sendable, Equatable, LocalizedError {
+    case unreadable(path: String, reason: String)
+    case corrupt(path: String, reason: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unreadable(let path, let reason):
+            "Could not read settings at \(path): \(reason)"
+        case .corrupt(let path, let reason):
+            "Settings at \(path) are invalid JSON: \(reason)"
+        }
+    }
+}
+
+public enum AppConfigSaveError: Error, Sendable, Equatable, LocalizedError {
+    case createDirectory(path: String, reason: String)
+    case encode(reason: String)
+    case createTemporary(path: String, reason: String)
+    case writeTemporary(path: String, reason: String)
+    case replace(path: String, reason: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .createDirectory(let path, let reason):
+            "Could not create the settings directory at \(path): \(reason)"
+        case .encode(let reason):
+            "Could not encode settings: \(reason)"
+        case .createTemporary(let path, let reason):
+            "Could not create a private temporary settings file at \(path): \(reason)"
+        case .writeTemporary(let path, let reason):
+            "Could not write settings at \(path): \(reason)"
+        case .replace(let path, let reason):
+            "Could not atomically replace settings at \(path): \(reason)"
+        }
+    }
+}
+
 /// Loads/saves `AppConfig` and resolves the effective Gemini key.
 public enum AppConfigStore {
     public static var url: URL {
         StoreLocation.supportDirectory.appendingPathComponent("config.json")
     }
 
-    public static func load() -> AppConfig {
-        guard let data = try? Data(contentsOf: url),
-              let config = try? JSONDecoder().decode(AppConfig.self, from: data) else {
-            return AppConfig()
-        }
-        return config
+    /// Strict load for observable surfaces such as Settings. A missing file means defaults; an
+    /// unreadable or corrupt existing file is a typed error and is never silently overwritten.
+    public static func load() throws -> AppConfig {
+        try load(from: url)
     }
 
-    public static func save(_ config: AppConfig) {
-        try? FileManager.default.createDirectory(at: StoreLocation.supportDirectory, withIntermediateDirectories: true)
+    public static func load(from target: URL) throws -> AppConfig {
+        guard FileManager.default.fileExists(atPath: target.path) else { return AppConfig() }
+        let data: Data
+        do {
+            data = try Data(contentsOf: target)
+        } catch {
+            throw AppConfigLoadError.unreadable(path: target.path, reason: error.localizedDescription)
+        }
+        do {
+            return try JSONDecoder().decode(AppConfig.self, from: data)
+        } catch {
+            throw AppConfigLoadError.corrupt(path: target.path, reason: error.localizedDescription)
+        }
+    }
+
+    /// Hook/CLI-safe fallback. Corrupt settings degrade to defaults so capture can continue, but the
+    /// diagnostic is emitted to stderr (or the supplied sink) instead of disappearing.
+    public static func loadBestEffort(
+        from target: URL? = nil,
+        diagnostic: ((String) -> Void)? = nil
+    ) -> AppConfig {
+        do {
+            return try load(from: target ?? url)
+        } catch {
+            let message = "hypermnesia: warning: \(error.localizedDescription)\n"
+            if let diagnostic {
+                diagnostic(message.trimmingCharacters(in: .newlines))
+            } else {
+                try? FileHandle.standardError.write(contentsOf: Data(message.utf8))
+            }
+            return AppConfig()
+        }
+    }
+
+    public static func save(_ config: AppConfig) throws {
+        try save(config, to: url)
+    }
+
+    /// Encode to a same-directory 0600 temporary file, fsync it, then rename over the destination.
+    /// `rename(2)` is atomic and the temporary inode is private from creation, so an API key is never
+    /// exposed through a partially-written or briefly world-readable config file.
+    public static func save(_ config: AppConfig, to target: URL) throws {
+        let directory = target.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+        } catch {
+            throw AppConfigSaveError.createDirectory(path: directory.path, reason: error.localizedDescription)
+        }
+
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(config) else { return }
-        // Create with 0600 from the start (it may hold an API key) — avoids a brief world-readable window.
-        FileManager.default.createFile(atPath: url.path, contents: data, attributes: [.posixPermissions: 0o600])
+        let data: Data
+        do {
+            data = try encoder.encode(config)
+        } catch {
+            throw AppConfigSaveError.encode(reason: error.localizedDescription)
+        }
+
+        let temporary = directory.appendingPathComponent(".config-\(UUID().uuidString).tmp")
+        let fd = open(temporary.path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
+        guard fd >= 0 else {
+            throw AppConfigSaveError.createTemporary(
+                path: temporary.path, reason: String(cString: strerror(errno)))
+        }
+        var shouldRemoveTemporary = true
+        defer {
+            close(fd)
+            if shouldRemoveTemporary { try? FileManager.default.removeItem(at: temporary) }
+        }
+
+        let writeError: String? = data.withUnsafeBytes { bytes in
+            guard let base = bytes.baseAddress else { return nil }
+            var written = 0
+            while written < bytes.count {
+                let count = Darwin.write(fd, base.advanced(by: written), bytes.count - written)
+                if count < 0 {
+                    if errno == EINTR { continue }
+                    return String(cString: strerror(errno))
+                }
+                written += count
+            }
+            return nil
+        }
+        if let writeError {
+            throw AppConfigSaveError.writeTemporary(path: temporary.path, reason: writeError)
+        }
+        guard fsync(fd) == 0 else {
+            throw AppConfigSaveError.writeTemporary(
+                path: temporary.path, reason: String(cString: strerror(errno)))
+        }
+        guard rename(temporary.path, target.path) == 0 else {
+            throw AppConfigSaveError.replace(path: target.path, reason: String(cString: strerror(errno)))
+        }
+        shouldRemoveTemporary = false
     }
 
     /// Effective Gemini key: explicit config value, else the `GEMINI_API_KEY` environment.

@@ -52,5 +52,11 @@ let package = Package(
             name: "HypermnesiaKitTests",
             dependencies: ["HypermnesiaKit"]
         ),
+        .testTarget(
+            name: "HypermnesiaCLIContractTests",
+            // Executable-target dependencies are supported by SwiftPM and force this binary to be
+            // built before the contract test bundle, including clean and custom scratch builds.
+            dependencies: ["HypermnesiaKit", "hypermnesia"]
+        ),
     ]
 )

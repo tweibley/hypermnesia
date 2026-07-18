@@ -60,7 +60,8 @@ struct BeliefOutcomeTests {
                                  data: .convention(.init(rule: "r", relatedFiles: ["gone.swift"])), belief: 0.8)
         try store.upsert([good, drifted])
 
-        let counts = MemoryAuditor.recordOutcomes(store: store, projectId: project, repoPath: repo.path)
+        var findings = MemoryAuditor.audit(store: store, projectId: project, repoPath: repo.path)
+        let counts = MemoryAuditor.recordOutcomes(findings, store: store, projectId: project)
         #expect(counts.corroborated == 1)
         #expect(counts.drifted == 1)
         let goodAfter = try #require(try store.node(id: good.id))
@@ -72,7 +73,7 @@ struct BeliefOutcomeTests {
         #expect(goodAfter.confidence > driftedAfter.confidence)
 
         // Idempotent: re-running with the SAME reality doesn't compound the counters.
-        let again = MemoryAuditor.recordOutcomes(store: store, projectId: project, repoPath: repo.path)
+        let again = MemoryAuditor.recordOutcomes(findings, store: store, projectId: project)
         #expect(again.corroborated == 0)
         #expect(again.drifted == 0)
         #expect(try #require(try store.node(id: good.id)).timesAppliedSuccess == 1)
@@ -80,8 +81,26 @@ struct BeliefOutcomeTests {
 
         // But a genuine change is recorded: once the missing file appears, the drifted memory corroborates.
         try "ok".write(to: repo.appendingPathComponent("gone.swift"), atomically: true, encoding: .utf8)
-        let recovered = MemoryAuditor.recordOutcomes(store: store, projectId: project, repoPath: repo.path)
+        findings = MemoryAuditor.audit(store: store, projectId: project, repoPath: repo.path)
+        let recovered = MemoryAuditor.recordOutcomes(findings, store: store, projectId: project)
         #expect(recovered.corroborated == 1)   // the formerly-drifted memory flipped to consistent
         #expect(try #require(try store.node(id: drifted.id)).timesAppliedSuccess == 1)
+    }
+
+    @Test("deep OUTDATED finding cannot be corroborated in the same pass")
+    func deepFindingDrifts() throws {
+        let store = try MemoryStore(location: .inMemory)
+        let node = MemoryNode(
+            projectId: "p", type: .convention, status: .confirmed, title: "old", summary: "s",
+            data: .convention(.init(rule: "Use API v1", relatedFiles: ["present.swift"]))
+        )
+        try store.upsert(node)
+        let findings = [AuditFinding(nodeId: node.id, title: node.title, issue: .outdated, detail: "now v2")]
+
+        let result = MemoryAuditor.recordOutcomes(findings, store: store, projectId: "p")
+
+        #expect(result.drifted == 1)
+        #expect(result.corroborated == 0)
+        #expect(try #require(try store.node(id: node.id)).timesOverridden == 1)
     }
 }

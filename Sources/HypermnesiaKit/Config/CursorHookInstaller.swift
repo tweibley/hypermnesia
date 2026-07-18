@@ -59,7 +59,7 @@ public enum CursorHookInstaller {
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
         let bin = ConfigFile.shellQuote(binaryPath)
         let hydrateCmd = "\(bin) hydrate --client cursor"
-        let captureCmd = "\(bin) capture --client cursor; (nohup \(bin) drain >/dev/null 2>&1 &)"
+        let captureCmd = HookDrainDiagnostics.captureCommand(binaryPath: binaryPath, client: "cursor")
         // Notch status: a separate hook entry (each entry gets its own stdin copy of the payload —
         // a `;` chain would let capture starve it of stdin). beforeSubmitPrompt is answered with
         // `{"continue": true}` by the CLI, so it never holds a prompt.

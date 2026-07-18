@@ -98,4 +98,33 @@ struct HydrationTests {
         #expect(ctx.contains("## Facts"))
         #expect(!ctx.contains("\n## Conventions"))
     }
+
+    @Test("ranking considers confirmed memories beyond the newest 500")
+    func ranksCompleteCorpus() throws {
+        let s = try store()
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        var nodes = (0..<500).map { index in
+            MemoryNode(
+                projectId: project, type: .fact, status: .confirmed,
+                title: "Decoy \(index)", summary: "lower ranked",
+                data: .fact(.init(category: "state", key: "decoy-\(index)", value: "x")),
+                confidence: 0.5, createdAt: base.addingTimeInterval(Double(index + 1)),
+                updatedAt: base.addingTimeInterval(Double(index + 1))
+            )
+        }
+        let best = MemoryNode(
+            projectId: project, type: .fact, status: .confirmed,
+            title: "Best old memory", summary: "highest confidence",
+            data: .fact(.init(category: "state", key: "winner", value: "complete corpus")),
+            confidence: 1.0, createdAt: base, updatedAt: base
+        )
+        nodes.append(best)
+        try s.upsert(nodes)
+        var options = MemoryHydrator.Options()
+        options.maxItems = 1
+
+        let ranked = MemoryHydrator.relevantMemories(store: s, projectId: project, options: options)
+
+        #expect(ranked.map(\.id) == [best.id])
+    }
 }

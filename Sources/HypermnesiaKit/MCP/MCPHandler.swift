@@ -165,7 +165,7 @@ public struct MCPHandler: Sendable {
                               title: title, summary: summary, data: data)
         // Link a contradicted memory (same topic, different substance) so confirming this draft
         // supersedes it — same revision flow as captured memories.
-        let pool = (try? store.nodes(projectId: projectId, limit: 500)) ?? []
+        let pool = (try? store.allNodes(projectId: projectId, type: type)) ?? []
         if DedupEngine.duplicate(of: node, in: pool) == nil,
            let conflicting = ConflictEngine.conflict(of: node, in: pool) {
             node.supersedesId = conflicting.id

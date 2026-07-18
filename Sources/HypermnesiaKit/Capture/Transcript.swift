@@ -40,23 +40,43 @@ public enum TranscriptParser {
 
     public static func parse(fileAt url: URL) throws -> [TranscriptEvent] {
         let raw = try String(contentsOf: url, encoding: .utf8)
-        return parse(jsonl: raw)
+        return try parseValidated(jsonl: raw)
     }
 
     public static func parse(jsonl: String) -> [TranscriptEvent] {
+        (try? parseValidated(jsonl: jsonl)) ?? []
+    }
+
+    /// Strict parsing for ingest. Empty transcripts and transcripts made entirely of recognized
+    /// bookkeeping records are valid-empty; malformed JSON or input with no recognized transcript
+    /// records is invalid and must remain retryable.
+    public static func parseValidated(jsonl: String) throws -> [TranscriptEvent] {
         let decoder = JSONDecoder()
         var events: [TranscriptEvent] = []
-        for line in jsonl.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard let data = line.data(using: .utf8),
-                  let raw = try? decoder.decode(RawLine.self, from: data)
-            else { continue }
+        let lines = jsonl.split(separator: "\n", omittingEmptySubsequences: true)
+        var recognized = 0
+        for line in lines {
+            guard let data = line.data(using: .utf8) else {
+                throw TranscriptParseError.corrupt
+            }
+            let raw: RawLine
+            do {
+                raw = try decoder.decode(RawLine.self, from: data)
+            } catch {
+                throw TranscriptParseError.corrupt
+            }
 
             // Antigravity lines carry `step_index`/`source` instead of a role — a separate dialect.
             if raw.stepIndex != nil, raw.source != nil {
+                recognized += 1
                 if let event = antigravityEvent(from: raw) { events.append(event) }
                 continue
             }
-            guard let role = raw.role else { continue }
+            guard let role = raw.role else {
+                if raw.isRecognizedBookkeeping { recognized += 1 }
+                continue
+            }
+            recognized += 1
 
             var texts: [String] = []
             var uses: [ToolUse] = []
@@ -99,6 +119,9 @@ public enum TranscriptParser {
                 toolUses: uses,
                 toolResults: results
             ))
+        }
+        if !lines.isEmpty, recognized == 0 {
+            throw TranscriptParseError.unrecognized
         }
         return events
     }
@@ -277,6 +300,11 @@ public enum TranscriptParser {
     }
 }
 
+public enum TranscriptParseError: Error, Sendable, Equatable {
+    case corrupt
+    case unrecognized
+}
+
 // MARK: - Raw decoding
 
 private struct RawLine: Decodable {
@@ -335,6 +363,15 @@ private struct RawLine: Decodable {
         case "assistant": .assistant
         default: nil
         }
+    }
+
+    /// Records emitted by supported clients that intentionally carry no conversation event.
+    var isRecognizedBookkeeping: Bool {
+        guard let type else { return false }
+        return [
+            "queue-operation", "ai-title", "summary", "attachment", "turn_ended",
+            "system", "progress", "file-history-snapshot"
+        ].contains(type)
     }
 }
 

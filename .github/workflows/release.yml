@@ -52,6 +52,23 @@ jobs:
             exit 1
           fi
 
+      - name: Verify checkout is exact tagged SHA
+        run: |
+          HEAD_SHA="$(git rev-parse HEAD)"
+          TAG_SHA="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
+          if [ "$HEAD_SHA" != "$TAG_SHA" ] || [ "$HEAD_SHA" != "$GITHUB_SHA" ]; then
+            echo "Release checkout mismatch: HEAD=$HEAD_SHA tag=$TAG_SHA event=$GITHUB_SHA" >&2
+            exit 1
+          fi
+
+      # Deterministic release contract gate. The broader eval harness is model-driven; its
+      # --skip-claude mode still provisions external Python grader environments and validates
+      # harness mechanics rather than the signed Swift product. Keep signing gated on the complete,
+      # no-model Swift contract suite (which covers hook commands, queue health, storage, and CLI).
+      - name: Swift contract suite
+        timeout-minutes: 10
+        run: swift test --parallel
+
       - name: Import Developer ID certificate
         env:
           CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}

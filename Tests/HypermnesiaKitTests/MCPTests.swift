@@ -74,4 +74,39 @@ struct MCPTests {
         let bad = await mcp.handle(["jsonrpc": "2.0", "id": 9, "method": "no/such"])
         #expect((bad?["error"] as? [String: Any])?["code"] as? Int == -32601)
     }
+
+    @Test("remember conflict detection considers same-type memories beyond newest 500")
+    func rememberConflictUsesCompleteCorpus() async throws {
+        let store = try MemoryStore(location: .inMemory)
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let old = MemoryNode(
+            projectId: project, type: .fact, status: .confirmed,
+            title: "Legacy endpoint", summary: "Uses SOAP XML transport",
+            data: .fact(.init(category: "state", key: "Target", value: "SOAP")),
+            createdAt: base, updatedAt: base
+        )
+        var nodes = [old]
+        nodes += (0..<500).map { index in
+            MemoryNode(
+                projectId: project, type: .fact, status: .confirmed,
+                title: "Decoy \(index)", summary: "Unrelated state \(index)",
+                data: .fact(.init(category: "state", key: "decoy-\(index)", value: "\(index)")),
+                createdAt: base.addingTimeInterval(Double(index + 1)),
+                updatedAt: base.addingTimeInterval(Double(index + 1))
+            )
+        }
+        try store.upsert(nodes)
+        let mcp = MCPHandler(store: store)
+
+        _ = await mcp.handle([
+            "jsonrpc": "2.0", "id": 10, "method": "tools/call",
+            "params": ["name": "remember", "arguments": [
+                "type": "fact", "title": "Target",
+                "summary": "Uses GraphQL federation", "project": project,
+            ]],
+        ])
+
+        let draft = try #require(try store.allNodes(projectId: project, status: .draft).first)
+        #expect(draft.supersedesId == old.id)
+    }
 }

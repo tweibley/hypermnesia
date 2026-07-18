@@ -73,6 +73,7 @@ final class AppModel {
     /// dismissible banner. Mutations that swallow their errors read as false success ("Up to date.")
     /// and cost the user data without them knowing.
     var lastActionError: String?
+    private(set) var captureQueueHealth: CaptureQueueHealth = .empty
     private var drainTask: Task<Void, Never>?
 
     /// One reversible triage action. Undo is snapshot-based: restoring these full row snapshots
@@ -171,6 +172,7 @@ final class AppModel {
         }
         completedInitialLoad = true
         refreshTotalDraftCount()
+        refreshQueueHealth()
         let remembered = UserDefaults.standard.string(forKey: Self.lastSelectedProjectKey)
         if let remembered, projects.contains(remembered), selectedProject != remembered {
             selectedProject = remembered
@@ -202,6 +204,25 @@ final class AppModel {
         let all = (try? store.projects()) ?? []
         totalDraftCount = all.reduce(0) { sum, project in
             sum + ((try? store.counts(projectId: project, status: .draft)) ?? [:]).values.reduce(0, +)
+        }
+    }
+
+    func refreshQueueHealth() {
+        guard let store else {
+            captureQueueHealth = .empty
+            return
+        }
+        captureQueueHealth = (try? store.captureQueueHealth()) ?? .empty
+    }
+
+    func clearFailedCaptures() {
+        guard let store else { return }
+        do {
+            _ = try store.clearFailedCaptures()
+            lastActionError = nil
+            refreshQueueHealth()
+        } catch {
+            lastActionError = "Could not clear failed captures: \(error.localizedDescription)"
         }
     }
 
@@ -353,28 +374,15 @@ final class AppModel {
 
     func confirm(_ node: MemoryNode) {
         guard let store else { return }
-        // Snapshot everything this confirm will touch, so Undo restores all of it: the draft
-        // itself, the memory it supersedes, and the near-duplicate drafts the purge removes.
-        var snapshots: [MemoryNode] = []
-        let fresh = (try? store.node(id: node.id)) ?? nil
-        if let fresh { snapshots.append(fresh) }
-        if let oldId = fresh?.supersedesId, let target = (try? store.node(id: oldId)) ?? nil {
-            snapshots.append(target)
+        do {
+            let result = try MemoryTriageService.confirm(nodeIDs: [node.id], store: store)
+            if result.confirmed > 0 {
+                recordUndo("Confirmed “\(node.title)”", restoring: result.snapshots)
+            }
+            lastActionError = nil
+        } catch {
+            lastActionError = "Couldn't confirm the memory: \(error.localizedDescription)"
         }
-        let drafts = (try? store.nodes(projectId: node.projectId, status: .draft)) ?? []
-        let purged = DedupEngine.similarDrafts(to: node, among: drafts)
-        snapshots += purged
-
-        update(node) { $0.status = .confirmed; $0.updatedAt = Date() }
-        // A confirmed revision supersedes the memory it contradicts (linked at capture time).
-        if let confirmed = (try? store.node(id: node.id)) ?? nil {
-            ConflictEngine.applySupersede(for: confirmed, store: store)
-        }
-        // Layer 2: now that this is confirmed, purge near-duplicate drafts.
-        for duplicate in purged {
-            try? store.softDeleteNode(id: duplicate.id)
-        }
-        recordUndo("Confirmed “\(node.title)”", restoring: snapshots)
         reloadMemories()
     }
 
@@ -549,29 +557,15 @@ final class AppModel {
 
     func confirmAllDrafts() {
         guard let store else { return }
-        var snapshots: [MemoryNode] = []
-        var confirmed = 0
-        for draft in draftMemories {
-            guard var node = try? store.node(id: draft.id) else { continue }   // fresh row, not stale snapshot
-            let beforeThisDraft = snapshots.count
-            snapshots.append(node)
-            if let oldId = node.supersedesId, let target = (try? store.node(id: oldId)) ?? nil {
-                snapshots.append(target)
+        do {
+            let result = try MemoryTriageService.confirm(nodeIDs: draftMemories.map(\.id), store: store)
+            if result.confirmed > 0 {
+                recordUndo("Confirmed \(result.confirmed) draft\(result.confirmed == 1 ? "" : "s")",
+                           restoring: result.snapshots)
             }
-            node.status = .confirmed
-            node.updatedAt = Date()
-            do {
-                try store.upsert(node)
-            } catch {
-                snapshots.removeSubrange(beforeThisDraft...)   // nothing changed; don't "restore" it
-                lastActionError = "Couldn't confirm every draft: \(error.localizedDescription)"
-                continue
-            }
-            confirmed += 1
-            ConflictEngine.applySupersede(for: node, store: store)
-        }
-        if confirmed > 0 {
-            recordUndo("Confirmed \(confirmed) draft\(confirmed == 1 ? "" : "s")", restoring: snapshots)
+            lastActionError = nil
+        } catch {
+            lastActionError = "Couldn't confirm every draft: \(error.localizedDescription)"
         }
         reloadMemories()
         if draftMemories.isEmpty {
@@ -583,29 +577,16 @@ final class AppModel {
     /// Confirm every selected draft (already-confirmed rows in the selection are left alone).
     func confirmSelected() {
         guard let store else { return }
-        var snapshots: [MemoryNode] = []
-        var confirmed = 0
-        for id in selectedMemoryIDs {
-            guard var node = (try? store.node(id: id)) ?? nil, node.status == .draft else { continue }
-            let beforeThisDraft = snapshots.count
-            snapshots.append(node)
-            if let oldId = node.supersedesId, let target = (try? store.node(id: oldId)) ?? nil {
-                snapshots.append(target)
+        let orderedIDs = draftMemories.map(\.id).filter { selectedMemoryIDs.contains($0) }
+        do {
+            let result = try MemoryTriageService.confirm(nodeIDs: orderedIDs, store: store)
+            if result.confirmed > 0 {
+                recordUndo("Confirmed \(result.confirmed) draft\(result.confirmed == 1 ? "" : "s")",
+                           restoring: result.snapshots)
             }
-            node.status = .confirmed
-            node.updatedAt = Date()
-            do {
-                try store.upsert(node)
-            } catch {
-                snapshots.removeSubrange(beforeThisDraft...)
-                lastActionError = "Couldn't confirm every selected draft: \(error.localizedDescription)"
-                continue
-            }
-            confirmed += 1
-            ConflictEngine.applySupersede(for: node, store: store)
-        }
-        if confirmed > 0 {
-            recordUndo("Confirmed \(confirmed) draft\(confirmed == 1 ? "" : "s")", restoring: snapshots)
+            lastActionError = nil
+        } catch {
+            lastActionError = "Couldn't confirm every selected draft: \(error.localizedDescription)"
         }
         setListSelection([])
         reloadMemories()
@@ -752,9 +733,10 @@ final class AppModel {
     private func drainOnce() async {
         guard let store else { return }
         let report = await SessionIngestor.drainQueue(store: store, classifier: Classifiers.makeFromConfig())
+        refreshQueueHealth()
         if report.added > 0 {
             reloadProjects()
-            if AppConfigStore.load().notifyOnNewDrafts {
+            if AppConfigStore.loadBestEffort().notifyOnNewDrafts {
                 Notifier.notifyNewDrafts(report.added)
             }
         }
@@ -782,7 +764,7 @@ final class AppModel {
                 if let repoPath = MemoryAuditor.repoPath(forProjectId: project) {
                     let findings = MemoryAuditor.audit(store: store, projectId: project, repoPath: repoPath)
                     didWork = MemoryAuditor.apply(findings, store: store) > 0 || didWork
-                    let outcomes = MemoryAuditor.recordOutcomes(store: store, projectId: project, repoPath: repoPath)
+                    let outcomes = MemoryAuditor.recordOutcomes(findings, store: store, projectId: project)
                     didWork = outcomes.corroborated > 0 || outcomes.drifted > 0 || didWork
                 }
                 didWork = ConflictEngine.sweep(store: store, projectId: project) > 0 || didWork
@@ -795,9 +777,9 @@ final class AppModel {
     /// Funnel every not-yet-processed historical session through the capture queue, then drain —
     /// the "Process previous sessions…" action.
     /// Sessions the next backfill would classify. Non-nil ⇒ the consent dialog is showing.
-    var backfillProposal: Int?
+    var backfillProposal: BackfillProposal?
 
-    /// Phase 1 of "Process previous sessions": scan and ENQUEUE what's classifiable, then ask —
+    /// Phase 1 of "Process previous sessions": read-only discovery, then ask —
     /// the run costs one classifier call per session on the user's key, so the count and the cost
     /// are shown before anything burns.
     func processPreviousSessions() {
@@ -806,27 +788,20 @@ final class AppModel {
         processingStatus = "Scanning sessions…"
         Task { [weak self] in
             guard let self else { return }
-            let enqueued = await Task.detached { () -> Int in
-                var count = 0
+            let proposal = await Task.detached { () -> BackfillProposal in
+                var candidates: [BackfillCandidate] = []
                 // Shared per-session gate, mirroring the CLI's `backfill --all`: already-processed
                 // and in-flight sessions are skipped (a live session isn't sealed mid-work — its
                 // own hooks finish it), as are sessions whose workspace can't be recovered or is
                 // a throwaway temp dir.
-                func enqueue(sessionId: String, url: URL, modifiedAt: Date, cwd: String?) {
-                    if (try? store.isProcessed(sessionId: sessionId)) == true { return }
-                    if SessionIngestor.isLikelyLive(modifiedAt: modifiedAt) { return }
-                    guard let cwd, !ClaudeCodeSessions.isEphemeral(cwd: cwd) else { return }
-                    try? store.enqueueOrUpdate(
-                        sessionId: sessionId,
-                        projectId: ProjectIdentity.resolve(cwd: cwd),
-                        transcriptPath: url.path, cwd: cwd,
-                        gitSha: nil, gitBranch: nil, isFinal: true
-                    )
-                    count += 1
+                func propose(sessionId: String, url: URL, modifiedAt: Date, cwd: String?) {
+                    guard let cwd else { return }
+                    candidates.append(.init(
+                        sessionId: sessionId, transcript: url, modifiedAt: modifiedAt, cwd: cwd))
                 }
 
                 for t in ClaudeCodeSessions.allTranscripts() {
-                    enqueue(sessionId: t.sessionId, url: t.url, modifiedAt: t.modifiedAt,
+                    propose(sessionId: t.sessionId, url: t.url, modifiedAt: t.modifiedAt,
                             cwd: ClaudeCodeSessions.firstCwd(of: t.url))
                 }
                 // Cursor transcripts carry no cwd — recover it from the (lossy) encoded project
@@ -838,41 +813,46 @@ final class AppModel {
                         decodedDirs[encodedDir] = value
                         return value
                     }()
-                    enqueue(sessionId: t.sessionId, url: t.url, modifiedAt: t.modifiedAt, cwd: cwd)
+                    propose(sessionId: t.sessionId, url: t.url, modifiedAt: t.modifiedAt, cwd: cwd)
                 }
                 // Antigravity transcripts carry no cwd either — the workspace comes from each
                 // transcript's own tool-call args.
                 for t in AntigravitySessions.allTranscripts() {
-                    enqueue(sessionId: t.sessionId, url: t.url, modifiedAt: t.modifiedAt,
+                    propose(sessionId: t.sessionId, url: t.url, modifiedAt: t.modifiedAt,
                             cwd: AntigravitySessions.firstCwd(of: t.url))
                 }
-                return count
+                return BackfillProposalService.discover(candidates, store: store)
             }.value
 
             self.isProcessing = false
-            if enqueued == 0 {
+            if proposal.count == 0 {
                 self.processingStatus = "No new sessions found."
             } else {
                 self.processingStatus = nil
-                self.backfillProposal = enqueued   // the UI shows the consent dialog
+                self.backfillProposal = proposal   // the UI shows the consent dialog
             }
         }
     }
 
     func cancelBackfill() {
         backfillProposal = nil
-        processingStatus = "Backfill cancelled — sessions stay queued for later."
+        processingStatus = "Backfill cancelled — no sessions were queued."
     }
 
     /// Phase 2: the user said yes — classify everything queued, narrating per-session progress,
     /// and land a first-ever backfill on the MRI so they watch their history light up.
     func confirmBackfill() {
-        guard let store, let total = backfillProposal else { return }
+        guard let store, let proposal = backfillProposal else { return }
         backfillProposal = nil
         guard !isProcessing else { return }
+        let enqueued = BackfillProposalService.enqueue(proposal, store: store)
+        guard enqueued > 0 else {
+            processingStatus = "No new sessions found."
+            return
+        }
         isProcessing = true
         let wasEmpty = projects.isEmpty
-        processingStatus = "Classifying \(total) session\(total == 1 ? "" : "s")…"
+        processingStatus = "Classifying \(enqueued) session\(enqueued == 1 ? "" : "s")…"
         Task { [weak self] in
             guard let self else { return }
             let report = await Task.detached {
@@ -924,7 +904,7 @@ final class AppModel {
                 let flagged = MemoryAuditor.apply(findings, store: store)
                 // Fold the reality-check into the belief model: corroborate memories whose files are
                 // present/unchanged, flag drift on the rest (idempotent — no compounding on re-run).
-                _ = MemoryAuditor.recordOutcomes(store: store, projectId: project, repoPath: repoPath)
+                _ = MemoryAuditor.recordOutcomes(findings, store: store, projectId: project)
                 return (findings.count, flagged)
             }.value
 

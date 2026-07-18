@@ -208,7 +208,7 @@ struct Audit: AsyncParsableCommand {
             // whose files are all present/unchanged, flag drift on the rest. Runs after apply so the
             // evidence-based recompute is the final word for file-backed memories; idempotent, so
             // re-running an unchanged audit doesn't compound.
-            let outcomes = MemoryAuditor.recordOutcomes(store: store, projectId: projectId, repoPath: repoPath)
+            let outcomes = MemoryAuditor.recordOutcomes(findings, store: store, projectId: projectId)
             print("\nLowered confidence on \(affected) memories (review them in Health / revalidate to restore).")
             if outcomes.corroborated + outcomes.drifted > 0 {
                 print("Belief evidence: \(outcomes.corroborated) corroborated, \(outcomes.drifted) drifted.")
@@ -345,7 +345,7 @@ struct Hydrate: AsyncParsableCommand {
 
         // SessionStart → full project context; UserPromptSubmit → memories relevant to this prompt.
         // (Cursor has no per-prompt context hook, so it only ever takes the SessionStart branch.)
-        let config = AppConfigStore.load()
+        let config = AppConfigStore.loadBestEffort()
         let result: MemoryHydrator.ContextResult?
         if event == "UserPromptSubmit" {
             guard config.injectPerPrompt, let prompt = ctx.prompt else { return }
@@ -447,35 +447,49 @@ struct Capture: AsyncParsableCommand {
             return
         }
 
-        // A reconstructed/declared transcript that isn't on disk is the #1 Cursor support case (transcript
-        // export disabled). Surface it; enqueue anyway so a later drain retries once the file appears.
-        if !FileManager.default.fileExists(atPath: transcript) {
-            HookIO.note("capture (\(client.rawValue)): transcript not found at \(transcript)"
-                + (client == .cursor ? " — enable transcript export in Cursor so a transcript_path is provided" : ""))
-        }
-
         // Already fully captured (e.g. backfilled)? Nothing to do.
         if (try? store.isProcessed(sessionId: sessionId)) == true {
             HookIO.debug("capture (\(client.rawValue)): \(sessionId.prefix(8)) already processed — skipping")
             return
         }
 
+        // The host may delete its transcript as soon as this hook returns. Snapshot it before
+        // enqueueing so the out-of-band drain never races a host-owned temporary file.
+        let queuedTranscript: URL
+        do {
+            queuedTranscript = try TranscriptSnapshotStore.snapshot(
+                transcript: URL(fileURLWithPath: transcript),
+                sessionId: sessionId
+            )
+        } catch {
+            HookIO.note("capture (\(client.rawValue)) skipped — could not snapshot transcript at \(transcript): "
+                + error.localizedDescription
+                + (client == .cursor ? " — enable transcript export in Cursor" : ""))
+            return
+        }
+
         // SessionEnd is the final flush; Stop is an in-session checkpoint.
         let projectId = ProjectIdentity.resolve(cwd: cwd)
-        try? store.enqueueOrUpdate(
-            sessionId: sessionId, projectId: projectId, transcriptPath: transcript, cwd: cwd,
-            gitSha: ProjectIdentity.headSha(cwd: cwd),
-            gitBranch: ProjectIdentity.currentBranch(cwd: cwd),
-            isFinal: ctx.isFinal
-        )
+        do {
+            try store.enqueueOrUpdate(
+                sessionId: sessionId, projectId: projectId, transcriptPath: queuedTranscript.path, cwd: cwd,
+                gitSha: ProjectIdentity.headSha(cwd: cwd),
+                gitBranch: ProjectIdentity.currentBranch(cwd: cwd),
+                isFinal: ctx.isFinal
+            )
+        } catch {
+            HookIO.note("capture (\(client.rawValue)) skipped — could not enqueue transcript snapshot: "
+                + error.localizedDescription)
+            return
+        }
         HookIO.debug("capture (\(client.rawValue)) \(ctx.event): enqueued \(sessionId.prefix(8)) for \(projectId)"
             + (ctx.isFinal ? " (final)" : ""))
 
         // Session momentum: the final flush also snapshots where the session left off, so the
         // NEXT session can pick up the thread. Trivial sessions leave no snapshot.
-        if ctx.isFinal, AppConfigStore.load().injectMomentum {
+        if ctx.isFinal, AppConfigStore.loadBestEffort().injectMomentum {
             Momentum.recordDeparture(
-                transcriptURL: URL(fileURLWithPath: transcript),
+                transcriptURL: queuedTranscript,
                 projectId: projectId, sessionId: sessionId)
         }
     }
@@ -512,7 +526,7 @@ struct SessionEventHook: AsyncParsableCommand {
         }
         guard !HookIO.isDisabled else { return }
         // The master switch lives in app config so turning the feature off also stops the writes.
-        guard AppConfigStore.load().notchEnabled else { return }
+        guard AppConfigStore.loadBestEffort().notchEnabled else { return }
 
         var kind: SessionEvent.Kind?
         var isHeartbeat = false
@@ -604,11 +618,30 @@ struct Drain: AsyncParsableCommand {
     @Option(name: .long, help: "Process at most N queued sessions this pass.")
     var limit: Int = 100
 
+    @Flag(name: .customLong("hook-background"),
+          help: "Redirect output to the private bounded hook diagnostic log.")
+    var hookBackground = false
+
+    @Flag(name: .long, help: "Delete terminal queue failures without deleting memories or source transcripts.")
+    var clearFailed = false
+
     func run() async throws {
+        if hookBackground {
+            try HookDrainDiagnostics.redirectStandardStreams()
+            print("\n[\(Date().ISO8601Format())] background drain")
+        }
         try validateClassifierFlag(classifier)
         guard limit > 0 else { throw ValidationError("--limit must be positive.") }
+        guard !(dryRun && clearFailed) else {
+            throw ValidationError("--dry-run and --clear-failed cannot be used together.")
+        }
         setvbuf(stdout, nil, _IONBF, 0)
         let store = try MemoryStore()
+        if clearFailed {
+            let removed = try store.clearFailedCaptures()
+            print("Cleared \(removed) failed capture\(removed == 1 ? "" : "s").")
+            return
+        }
         if dryRun {
             let queued = (try? store.pendingCaptures(limit: limit)) ?? []
             guard !queued.isEmpty else { print("Queue is empty."); return }
@@ -1193,7 +1226,7 @@ struct NotchDemo: AsyncParsableCommand {
             print("Cleared the sample cards.")
             return
         }
-        if !AppConfigStore.load().notchEnabled {
+        if !AppConfigStore.loadBestEffort().notchEnabled {
             print("⚠ Notch status is turned off — enable it in Hypermnesia Settings → Notch, then re-run.")
             return
         }
@@ -1302,6 +1335,19 @@ struct Doctor: AsyncParsableCommand {
         print("  MCP server:      \(AntigravityMCPInstaller.isInstalled() ? "registered ✓" : "not registered") (\(AntigravityMCPInstaller.configURL().path))")
 
         print("\nStore: \(StoreLocation.supportDirectory.appendingPathComponent("memory.db").path)")
+        if let store = try? MemoryStore(), let health = try? store.captureQueueHealth() {
+            print("Capture queue:")
+            print("  pending:         \(health.pending)")
+            print("  processing:      \(health.processing)")
+            print("  retrying:        \(health.retrying)")
+            print("  terminal errors: \(health.terminalErrors)\(health.hasErrors ? "  NEEDS ATTENTION ✗" : "")")
+            if let failure = health.lastError {
+                print("  last error:      \(failure.sessionId.prefix(8)) attempt \(failure.attempts) — \(failure.message)")
+            }
+        } else {
+            print("Capture queue:     (store unavailable)")
+        }
+        print("Drain diagnostics: \(HookDrainDiagnostics.logURL.path)")
         print("Set HYPERMNESIA_DEBUG=1 to trace hook runs on stderr.")
         print("OK")
     }

@@ -65,7 +65,7 @@ final class NotchStatusController {
 
     func refresh() {
         guard let panel else { return }
-        let config = AppConfigStore.load()
+        let config = AppConfigStore.loadBestEffort()
         guard config.notchEnabled else { panel.update(cards: [], working: []); return }
 
         let events = SessionEventLog.recent()

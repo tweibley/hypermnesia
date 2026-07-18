@@ -41,6 +41,16 @@ struct IncrementalCaptureTests {
         }
     }
 
+    struct DuplicateClassifier: Classifier {
+        func classify(_ conversation: Conversation, recentMemories: [RecentMemoryHint]) async throws -> [ClassifiedMemory] {
+            [ClassifiedMemory(
+                type: .fact, confidence: 0.9, title: "Runtime version",
+                summary: "The runtime uses Swift version six",
+                context: ["category": .string("stack"), "key": .string("swift"), "value": .string("6")]
+            )]
+        }
+    }
+
     @Test("classifies only the new slice and advances the cursor")
     func sliceAndCursor() async throws {
         let store = try MemoryStore(location: .inMemory)
@@ -97,7 +107,7 @@ struct IncrementalCaptureTests {
 
         let failed = await SessionIngestor.ingestIncremental(transcript: url, sessionId: "s", projectId: "p",
                                                              classifier: FailingClassifier(), store: store, minNewEvents: 6)
-        #expect(failed == .failed)
+        #expect(failed == .failed(reason: "classification failed", terminal: false))
         #expect(try store.cursor(sessionId: "s") == 0)   // cursor untouched — events not skipped
 
         // A later successful pass over the same events still captures them.
@@ -121,7 +131,7 @@ struct IncrementalCaptureTests {
         try broken.closeForTesting()
         let outcome = await SessionIngestor.ingestIncremental(transcript: url, sessionId: "s", projectId: "p",
                                                               classifier: MockClassifier(), store: broken, minNewEvents: 6)
-        #expect(outcome == .failed)
+        #expect(outcome == .failed(reason: "persist failed", terminal: false))
 
         // A fresh handle on the same DB sees no advanced cursor: the slice is still retryable.
         let reopened = try MemoryStore(location: .file(dbURL))
@@ -152,6 +162,91 @@ struct IncrementalCaptureTests {
                                                    classifier: MockClassifier(), store: reopened, source: .backfill)
         #expect(retried == 1)
         #expect(try reopened.isProcessed(sessionId: "s") == true)
+    }
+
+    @Test("bad transcripts stay retryable while valid-empty transcripts are sealed")
+    func transcriptValidityControlsSealing() async throws {
+        let store = try MemoryStore(location: .inMemory)
+        let bad = tempURL(); defer { try? FileManager.default.removeItem(at: bad) }
+        try "{not json".write(to: bad, atomically: true, encoding: .utf8)
+
+        let badCount = await SessionIngestor.ingest(
+            transcript: bad, sessionId: "bad", projectId: "p",
+            classifier: MockClassifier(), store: store, source: .backfill)
+        #expect(badCount == 0)
+        #expect(try store.isProcessed(sessionId: "bad") == false)
+        #expect(await SessionIngestor.ingestIncremental(
+            transcript: bad, sessionId: "bad-live", projectId: "p",
+            classifier: MockClassifier(), store: store, isFinal: true)
+            == .failed(reason: "transcript unreadable", terminal: false))
+
+        let missing = tempURL()
+        #expect(await SessionIngestor.ingestIncremental(
+            transcript: missing, sessionId: "gone", projectId: "p",
+            classifier: MockClassifier(), store: store, isFinal: true)
+            == .failed(reason: "transcript missing", terminal: true))
+
+        let empty = tempURL(); defer { try? FileManager.default.removeItem(at: empty) }
+        try #"{"type":"summary","summary":"nothing conversational"}"#
+            .write(to: empty, atomically: true, encoding: .utf8)
+        let emptyCount = await SessionIngestor.ingest(
+            transcript: empty, sessionId: "empty", projectId: "p",
+            classifier: MockClassifier(), store: store, source: .backfill)
+        #expect(emptyCount == 0)
+        #expect(try store.isProcessed(sessionId: "empty") == true)
+    }
+
+    @Test("backfill reinforcement uses transcript end while live reinforcement uses now")
+    func sourceControlsObservationTime() async throws {
+        let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
+        writeTranscript(6, to: url)
+        let endedAt = try #require(TranscriptParser.parseTimestamp("2026-06-18T10:00:05.000Z"))
+        func existing() -> MemoryNode {
+            MemoryNode(
+                projectId: "p", type: .fact, status: .confirmed,
+                title: "Runtime version", summary: "The runtime uses Swift version six",
+                data: .fact(.init(category: "stack", key: "swift", value: "6"))
+            )
+        }
+
+        let backfillStore = try MemoryStore(location: .inMemory)
+        let historical = existing()
+        try backfillStore.upsert(historical)
+        _ = await SessionIngestor.ingest(
+            transcript: url, sessionId: "historical", projectId: "p",
+            classifier: DuplicateClassifier(), store: backfillStore, source: .backfill)
+        #expect(try backfillStore.node(id: historical.id)?.lastValidatedAt == endedAt)
+
+        let liveStore = try MemoryStore(location: .inMemory)
+        let live = existing()
+        try liveStore.upsert(live)
+        let beforeLive = Date()
+        _ = await SessionIngestor.ingestIncremental(
+            transcript: url, sessionId: "live", projectId: "p",
+            classifier: DuplicateClassifier(), store: liveStore, minNewEvents: 1)
+        let liveObservation = try #require(try liveStore.node(id: live.id)?.lastValidatedAt)
+        #expect(liveObservation >= beforeLive)
+        #expect(liveObservation != endedAt)
+    }
+
+    @Test("drain marks a missing transcript terminal without burning retries")
+    func drainMissingTranscriptIsTerminal() async throws {
+        let store = try MemoryStore(location: .inMemory)
+        let missing = tempURL().path
+        try store.enqueueOrUpdate(
+            sessionId: "gone", projectId: "p", transcriptPath: missing,
+            cwd: "/repo", gitSha: nil, gitBranch: nil, isFinal: true)
+
+        let report = await SessionIngestor.drainQueue(
+            store: store, classifier: MockClassifier(), limit: 10)
+        #expect(report.failures == 1)
+
+        let health = try store.captureQueueHealth()
+        #expect(health.pending == 0)
+        #expect(health.retrying == 0)
+        #expect(health.terminalErrors == 1)
+        #expect(health.lastError?.message == "transcript missing")
+        #expect(health.lastError?.attempts == 1)
     }
 
     @Test("pruneFinishedCaptures drops old done/error rows but never pending ones")

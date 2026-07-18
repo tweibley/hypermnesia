@@ -67,7 +67,7 @@ public enum ClaudeMdImporter {
     public static func importProject(
         projectPath: String, projectId: String, store: MemoryStore, dryRun: Bool = false
     ) throws -> Outcome {
-        var pool = (try? store.nodes(projectId: projectId, limit: 2000)) ?? []
+        var pool = (try? store.allNodes(projectId: projectId)) ?? []
         var created: [MemoryNode] = []
         var duplicates = 0
         for file in sourceFiles(projectPath: projectPath) {

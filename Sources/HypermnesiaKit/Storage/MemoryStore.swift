@@ -85,6 +85,24 @@ public final class MemoryStore: Sendable {
         }
     }
 
+    /// Fetch the complete matching corpus. Engine paths whose correctness depends on considering
+    /// every candidate (hydration ranking, dedup, conflicts, audit, triage) must opt into this
+    /// explicitly instead of inheriting the UI-oriented bounded `nodes` query.
+    public func allNodes(
+        projectId: String,
+        type: MemoryType? = nil,
+        status: MemoryStatus? = nil,
+        includeDeleted: Bool = false
+    ) throws -> [MemoryNode] {
+        try dbQueue.read { db in
+            var request = MemoryNode.filter(Column("projectId") == projectId)
+            if let type { request = request.filter(Column("type") == type) }
+            if let status { request = request.filter(Column("status") == status) }
+            if !includeDeleted { request = request.filter(Column("deletedAt") == nil) }
+            return try request.order(Column("updatedAt").desc).fetchAll(db)
+        }
+    }
+
     /// Soft-delete a node (sets `deletedAt`, removes it from search).
     public func softDeleteNode(id: String, at date: Date = Date()) throws {
         try dbQueue.write { db in
@@ -211,6 +229,43 @@ public final class MemoryStore: Sendable {
         }
     }
 
+    public func captureQueueHealth() throws -> CaptureQueueHealth {
+        try dbQueue.read { db in
+            let pending = try CaptureQueueItem
+                .filter(Column("status") == CaptureStatus.pending.rawValue && Column("attempts") == 0)
+                .fetchCount(db)
+            let retrying = try CaptureQueueItem
+                .filter(Column("status") == CaptureStatus.pending.rawValue && Column("attempts") > 0)
+                .fetchCount(db)
+            let processing = try CaptureQueueItem
+                .filter(Column("status") == CaptureStatus.processing.rawValue)
+                .fetchCount(db)
+            let terminalErrors = try CaptureQueueItem
+                .filter(Column("status") == CaptureStatus.error.rawValue)
+                .fetchCount(db)
+            let last = try CaptureQueueItem
+                .filter(Column("lastError") != nil)
+                .order(Column("enqueuedAt").desc)
+                .fetchOne(db)
+            let failure = last.map {
+                CaptureQueueFailure(
+                    sessionId: $0.sessionId,
+                    projectId: $0.projectId,
+                    attempts: $0.attempts,
+                    message: $0.lastError ?? "Unknown capture failure",
+                    date: $0.enqueuedAt
+                )
+            }
+            return CaptureQueueHealth(
+                pending: pending,
+                processing: processing,
+                retrying: retrying,
+                terminalErrors: terminalErrors,
+                lastError: failure
+            )
+        }
+    }
+
     public func updateCapture(_ item: CaptureQueueItem) throws {
         try dbQueue.write { db in try item.update(db) }
     }
@@ -260,20 +315,49 @@ public final class MemoryStore: Sendable {
     /// rows are only useful for short-term inspection (`drain --dry-run`, doctor); without pruning
     /// they accumulate one per session forever. Pending/processing rows are never touched.
     @discardableResult
-    public func pruneFinishedCaptures(olderThanDays days: Int = 30, now: Date = Date()) throws -> Int {
+    public func pruneFinishedCaptures(
+        olderThanDays days: Int = 30,
+        now: Date = Date(),
+        supportDirectory: URL = StoreLocation.supportDirectory
+    ) throws -> Int {
         let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
-        return try dbQueue.write { db in
-            try CaptureQueueItem
+        let paths = try dbQueue.write { db in
+            let rows = try CaptureQueueItem
                 .filter([CaptureStatus.done.rawValue, CaptureStatus.error.rawValue].contains(Column("status")))
                 .filter(Column("enqueuedAt") < cutoff)
+                .fetchAll(db)
+            _ = try CaptureQueueItem
+                .filter(rows.map(\.id).contains(Column("id")))
                 .deleteAll(db)
+            return rows.map(\.transcriptPath)
         }
+        paths.forEach { TranscriptSnapshotStore.removeIfManaged($0, in: supportDirectory) }
+        return paths.count
+    }
+
+    /// Remove terminal failures without touching memories, transcripts owned by agent clients, or
+    /// active queue work. Managed transcript snapshots are deleted with their queue rows.
+    @discardableResult
+    public func clearFailedCaptures(
+        supportDirectory: URL = StoreLocation.supportDirectory
+    ) throws -> Int {
+        let paths = try dbQueue.write { db in
+            let rows = try CaptureQueueItem
+                .filter(Column("status") == CaptureStatus.error.rawValue)
+                .fetchAll(db)
+            _ = try CaptureQueueItem
+                .filter(Column("status") == CaptureStatus.error.rawValue)
+                .deleteAll(db)
+            return rows.map(\.transcriptPath)
+        }
+        paths.forEach { TranscriptSnapshotStore.removeIfManaged($0, in: supportDirectory) }
+        return paths.count
     }
 
     /// Enqueue a session, or refresh the existing not-done item for it (one active item per session).
     public func enqueueOrUpdate(
         sessionId: String, projectId: String, transcriptPath: String, cwd: String,
-        gitSha: String?, gitBranch: String?, isFinal: Bool
+        gitSha: String?, gitBranch: String?, isFinal: Bool, source: CaptureSource = .live
     ) throws {
         try dbQueue.write { db in
             if var existing = try CaptureQueueItem
@@ -285,11 +369,12 @@ public final class MemoryStore: Sendable {
                 existing.status = .pending
                 existing.transcriptPath = transcriptPath
                 if isFinal { existing.isFinal = true }
+                existing.source = source
                 try existing.update(db)
             } else {
                 try CaptureQueueItem(
                     sessionId: sessionId, projectId: projectId, transcriptPath: transcriptPath,
-                    cwd: cwd, gitSha: gitSha, gitBranch: gitBranch, isFinal: isFinal
+                    cwd: cwd, gitSha: gitSha, gitBranch: gitBranch, isFinal: isFinal, source: source
                 ).insert(db)
             }
         }
@@ -422,6 +507,27 @@ public final class MemoryStore: Sendable {
             }
             sql += " LIMIT ?"
             args.append(limit)
+            return try MemoryNode.fetchAll(db, sql: sql, arguments: StatementArguments(args))
+        }
+    }
+
+    /// Complete counterpart used before correctness-critical semantic ranking.
+    public func allNodesMissingEmbedding(
+        projectId: String, model: String, status: MemoryStatus? = nil
+    ) throws -> [MemoryNode] {
+        try dbQueue.read { db in
+            var sql = """
+                SELECT n.* FROM memory_node n
+                WHERE n.projectId = ? AND n.deletedAt IS NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM memory_embedding e WHERE e.nodeId = n.id AND e.model = ?
+                  )
+                """
+            var args: [any DatabaseValueConvertible] = [projectId, model]
+            if let status {
+                sql += " AND n.status = ?"
+                args.append(status.rawValue)
+            }
             return try MemoryNode.fetchAll(db, sql: sql, arguments: StatementArguments(args))
         }
     }

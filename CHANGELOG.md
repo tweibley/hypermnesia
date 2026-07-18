@@ -5,6 +5,43 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Durable capture queue**: hooks snapshot the host transcript into Application Support before
+  enqueueing, so Claude/Cursor/Antigravity deleting their file after the hook returns cannot strand
+  the out-of-band drain. Snapshots are removed when a queue row finishes or is cleared.
+- **Clear failed captures**: `hypermnesia drain --clear-failed` and a **Clear failed** button on the
+  queue banner remove terminal queue failures without touching memories or host transcripts.
+- **Queue health**: the app banner and `hypermnesia doctor` report pending / processing / retrying /
+  failed counts plus the latest failure reason.
+- **Hook drain diagnostics**: background SessionEnd drains append to a bounded rotating log at
+  `~/Library/Logs/Hypermnesia/drain.log` instead of discarding stdout/stderr.
+- **Consented backfill**: "Process previous sessions" proposes candidates first; nothing is enqueued
+  until you confirm. Confirmed historical sessions keep `source: backfill` through the shared drain.
+- **CLI contract tests**: a new test target runs the `hypermnesia` binary as a subprocess to lock
+  hook/MCP command contracts.
+- **App icon**: packaged `.icns` wired into `make-app` / `release` so the dock and Finder show a
+  proper icon.
+
+### Fixed
+
+- Bulk draft confirm now runs the same triage path as single confirm (supersession + near-duplicate
+  purge), so batch actions no longer skip cleanup.
+- Maintenance audit outcomes are recorded with the findings they produced (no more empty-array
+  recording).
+- Historical reinforcement uses the transcript's end time for backfill; live capture still uses now.
+- Corrupt or unrecognized transcripts stay retryable; missing transcripts fail immediately with a
+  clear `transcript missing` reason instead of burning five "classification failed" retries.
+- Config load/save is typed and atomic (0600 temp + rename); Settings surfaces persistence errors
+  instead of silently falling back.
+
+### Changed
+
+- Release workflow verifies the tagged SHA and runs the Swift test suite before signing credentials
+  are used.
+- Capture-queue rows record live vs backfill `source`; uncapped store readers remove correctness
+  caps that truncated large corpora during audit/embed paths.
+
 ## [0.1.1] — 2026-07-18
 
 ### Added
