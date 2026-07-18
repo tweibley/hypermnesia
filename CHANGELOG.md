@@ -12,6 +12,25 @@ versions follow [SemVer](https://semver.org).
   and the app offers "Check for Updates…" in the app menu and the menu-bar popover. Background
   checks are gentle: no surprise dialogs, just an "Update available" banner in the popover.
   Homebrew installs keep updating via `brew upgrade`, as before.
+- **Notch status**: live session status pops from the Mac's notch (top-center on displays
+  without one) — when an agent finishes its turn, and when a Claude Code session needs you
+  (permission request / waiting for input). One click jumps back to that exact session: the
+  precise iTerm2/Terminal tab via its tty, the hosting IDE window via its URL scheme, or the
+  host app. Cards auto-hide while you're already in that session's app; attention cards persist
+  up to 15 minutes, finished pops fade after 90 seconds. New `Notification` + `session-event`
+  hooks feed a local JSONL event log the app watches; configurable under Settings → Notch, with
+  a one-click hook update for installs that predate the feature. Preview it any time with
+  `hypermnesia notch-demo` (or Settings → Notch → Preview cards) — sample cards ride the real
+  pipeline, including click-to-jump-back into the terminal that ran the command.
+- **Working state**: the notch also shows agents *while they run* — a slim "N working" strip
+  (never a pop) that unfolds on hover into one row per running session with the project, what it's
+  chewing on, and elapsed turn time; click a row to jump there. Turn starts are stamped by
+  Claude Code's `UserPromptSubmit`, Cursor's `beforeSubmitPrompt`, and Antigravity's
+  `PreInvocation`; throttled per-tool heartbeats (`PostToolUse`, `afterFileEdit` /
+  `afterShellExecution`, `PreInvocation`) keep long turns honest and expire dead ones — and the
+  moment you approve a stalled permission prompt in its terminal, the heartbeat clears the stale
+  "needs your input" card. A Cursor stop you aborted yourself now clears silently instead of
+  popping "finished". Toggleable under Settings → Notch ("Show agents while they work").
 
 ## [0.1.0] — 2026-07-15
 
