@@ -113,16 +113,19 @@ final class SettingsModel {
         ])
     }
 
-    /// Resolve the `hypermnesia` CLI so the hooks can call it: login shell PATH first (respects a
-    /// brew install), then the copy bundled inside this very app — which is what makes the
-    /// direct-download path work without Homebrew ever putting the CLI on PATH — then dev paths.
+    /// Resolve the `hypermnesia` CLI so the hooks can call it. Prefer the copy bundled inside this
+    /// app so hook installs stay version-matched with the running UI (a stale `~/.local/bin` copy
+    /// otherwise wins via PATH and silently drops durability fixes). Fall back to login-shell PATH,
+    /// then known install / dev locations.
     private func resolveCLIPath() -> String? {
-        var fallbacks = ["~/.local/bin/hypermnesia"]
-        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("hypermnesia").path {
-            fallbacks.insert(bundled, at: 0)
+        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("hypermnesia").path,
+           FileManager.default.isExecutableFile(atPath: bundled) {
+            return bundled
         }
-        fallbacks.append("~/hypermnesia/.build/debug/hypermnesia")
-        return Self.resolveCommandPath("hypermnesia", fallbacks: fallbacks)
+        return Self.resolveCommandPath("hypermnesia", fallbacks: [
+            "~/.local/bin/hypermnesia",
+            "~/hypermnesia/.build/debug/hypermnesia",
+        ])
     }
 
     func setHooks(_ install: Bool) {

@@ -201,6 +201,31 @@ struct StoreTests {
         #expect(health.lastError?.message == "classification failed 5×")
     }
 
+    @Test("prune does not delete a snapshot still referenced by an active queue row")
+    func prunePreservesSharedSnapshots() throws {
+        let store = try makeStore()
+        let support = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hypermnesia-prune-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: support) }
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        let source = support.appendingPathComponent("host.jsonl")
+        try "transcript".write(to: source, atomically: true, encoding: .utf8)
+        let managed = try TranscriptSnapshotStore.snapshot(
+            transcript: source, sessionId: "shared", in: support)
+
+        // Old done row + fresh pending re-enqueue share the same managed path.
+        try store.enqueue(.init(
+            sessionId: "shared", projectId: "p", transcriptPath: managed.path,
+            cwd: "/repo", enqueuedAt: Date().addingTimeInterval(-40 * 86_400), status: .done))
+        try store.enqueue(.init(
+            id: UUID().uuidString, sessionId: "shared-live", projectId: "p",
+            transcriptPath: managed.path, cwd: "/repo", status: .pending))
+
+        #expect(try store.pruneFinishedCaptures(olderThanDays: 30, supportDirectory: support) == 1)
+        #expect(try store.captureQueueHealth().pending == 1)
+        #expect(FileManager.default.fileExists(atPath: managed.path))
+    }
+
     @Test("clearing failed captures preserves active rows, memories, and host transcripts")
     func clearFailedCaptures() throws {
         let store = try makeStore()

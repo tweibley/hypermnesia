@@ -164,25 +164,43 @@ struct IncrementalCaptureTests {
         #expect(try reopened.isProcessed(sessionId: "s") == true)
     }
 
-    @Test("bad transcripts stay retryable while valid-empty transcripts are sealed")
+    @Test("wholly bad backfill transcripts are sealed; live unreadable stays retryable")
     func transcriptValidityControlsSealing() async throws {
         let store = try MemoryStore(location: .inMemory)
         let bad = tempURL(); defer { try? FileManager.default.removeItem(at: bad) }
         try "{not json".write(to: bad, atomically: true, encoding: .utf8)
 
+        // Backfill must not re-propose an undecodable session forever.
         let badCount = await SessionIngestor.ingest(
             transcript: bad, sessionId: "bad", projectId: "p",
             classifier: MockClassifier(), store: store, source: .backfill)
         #expect(badCount == 0)
-        #expect(try store.isProcessed(sessionId: "bad") == false)
+        #expect(try store.isProcessed(sessionId: "bad") == true)
         #expect(await SessionIngestor.ingestIncremental(
             transcript: bad, sessionId: "bad-live", projectId: "p",
             classifier: MockClassifier(), store: store, isFinal: true)
             == .failed(reason: "transcript unreadable", terminal: false))
 
-        let missing = tempURL()
+        // Host-owned missing paths stay retryable (later Stop may re-snapshot); managed missing
+        // paths are terminal.
+        let missingHost = tempURL()
         #expect(await SessionIngestor.ingestIncremental(
-            transcript: missing, sessionId: "gone", projectId: "p",
+            transcript: missingHost, sessionId: "gone-host", projectId: "p",
+            classifier: MockClassifier(), store: store, isFinal: true)
+            == .failed(reason: "transcript missing", terminal: false))
+
+        let support = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ht-missing-managed-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: support) }
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        let source = support.appendingPathComponent("src.jsonl")
+        try #"{"type":"user","message":{"role":"user","content":"x"}}"#
+            .write(to: source, atomically: true, encoding: .utf8)
+        let managed = try TranscriptSnapshotStore.snapshot(
+            transcript: source, sessionId: "gone-managed", in: support)
+        try FileManager.default.removeItem(at: managed)
+        #expect(await SessionIngestor.ingestIncremental(
+            transcript: managed, sessionId: "gone-managed", projectId: "p",
             classifier: MockClassifier(), store: store, isFinal: true)
             == .failed(reason: "transcript missing", terminal: true))
 
@@ -229,12 +247,21 @@ struct IncrementalCaptureTests {
         #expect(liveObservation != endedAt)
     }
 
-    @Test("drain marks a missing transcript terminal without burning retries")
+    @Test("drain marks a missing managed snapshot terminal without burning retries")
     func drainMissingTranscriptIsTerminal() async throws {
         let store = try MemoryStore(location: .inMemory)
-        let missing = tempURL().path
+        let support = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ht-drain-missing-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: support) }
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        let source = support.appendingPathComponent("src.jsonl")
+        try "x".write(to: source, atomically: true, encoding: .utf8)
+        let managed = try TranscriptSnapshotStore.snapshot(
+            transcript: source, sessionId: "gone", in: support)
+        try FileManager.default.removeItem(at: managed)
+
         try store.enqueueOrUpdate(
-            sessionId: "gone", projectId: "p", transcriptPath: missing,
+            sessionId: "gone", projectId: "p", transcriptPath: managed.path,
             cwd: "/repo", gitSha: nil, gitBranch: nil, isFinal: true)
 
         let report = await SessionIngestor.drainQueue(
@@ -247,6 +274,30 @@ struct IncrementalCaptureTests {
         #expect(health.terminalErrors == 1)
         #expect(health.lastError?.message == "transcript missing")
         #expect(health.lastError?.attempts == 1)
+    }
+
+    @Test("re-enqueue resets the retry budget")
+    func reenqueueResetsAttempts() throws {
+        let store = try MemoryStore(location: .inMemory)
+        try store.enqueueOrUpdate(
+            sessionId: "s", projectId: "p", transcriptPath: "/t1",
+            cwd: "/c", gitSha: nil, gitBranch: nil, isFinal: false)
+        let id = try #require(try store.pendingCaptures(limit: 1).first).id
+        #expect(try store.beginProcessing(id: id))
+        #expect(try store.finishProcessing(
+            id: id, status: .pending, lastError: "classification failed (attempt 1 of 5)"))
+        var row = try #require(try store.captureItem(id: id))
+        #expect(row.attempts == 1)
+        #expect(row.lastError != nil)
+
+        try store.enqueueOrUpdate(
+            sessionId: "s", projectId: "p", transcriptPath: "/t2",
+            cwd: "/c", gitSha: nil, gitBranch: nil, isFinal: true)
+        row = try #require(try store.captureItem(id: id))
+        #expect(row.attempts == 0)
+        #expect(row.lastError == nil)
+        #expect(row.status == .pending)
+        #expect(row.isFinal == true)
     }
 
     @Test("pruneFinishedCaptures drops old done/error rows but never pending ones")

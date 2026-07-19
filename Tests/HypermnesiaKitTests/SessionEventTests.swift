@@ -241,6 +241,21 @@ struct SessionEventTests {
         #expect(SessionEventLog.quickTitle(transcriptPath: dir.appendingPathComponent("missing.jsonl").path) == nil)
     }
 
+    @Test("quickTitle drops a byte-capped truncated final line instead of poisoning the parse")
+    func quickTitleTruncatesAtLastNewline() throws {
+        let dir = try tempDir("setitle-cap")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let transcript = dir.appendingPathComponent("t.jsonl")
+        let good = #"{"type":"user","timestamp":"2026-06-01T10:00:01.000Z","sessionId":"s1","message":{"role":"user","content":"Recover me"}}"# + "\n"
+        let pad = String(repeating: "y", count: 200)
+        let truncated = #"{"type":"user","message":{"role":"user","content":"\#(pad)"#  // no closing braces
+        let body = good + truncated
+        try Data(body.utf8).write(to: transcript)
+
+        let title = SessionEventLog.quickTitle(transcriptPath: transcript.path, maxBytes: body.utf8.count)
+        #expect(title == "Recover me")
+    }
+
     // MARK: - Demo preview
 
     @Test("demo events render three cards (attention first) plus two working rows; clearEvents retracts all")

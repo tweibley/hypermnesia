@@ -214,30 +214,33 @@ struct ConfigTests {
     @Test("all hook installers use the shared logged background drain command")
     func loggedDrainCommands() throws {
         let binary = "/Users/Jane Smith/bin/hypermnesia"
-        let quoted = "'/Users/Jane Smith/bin/hypermnesia'"
+        let expectedClaude = HookDrainDiagnostics.captureCommand(binaryPath: binary)
+        let expectedCursor = HookDrainDiagnostics.captureCommand(binaryPath: binary, client: "cursor")
+        let expectedAntigravity = HookDrainDiagnostics.captureCommand(
+            binaryPath: binary, client: "antigravity")
 
         let claude = HookInstaller.merged(into: [:], binaryPath: binary)
         let claudeHooks = claude["hooks"] as! [String: Any]
         let claudeStop = (claudeHooks["Stop"] as! [[String: Any]]).last!
         let claudeCommands = (claudeStop["hooks"] as! [[String: Any]]).compactMap { $0["command"] as? String }
-        #expect(claudeCommands.first
-                == "\(quoted) capture; (nohup \(quoted) drain --hook-background &)")
+        #expect(claudeCommands.first == expectedClaude)
 
         let cursor = CursorHookInstaller.merged(into: [:], binaryPath: binary)
         let cursorHooks = cursor["hooks"] as! [String: Any]
         let cursorCommands = (cursorHooks["stop"] as! [[String: Any]]).compactMap { $0["command"] as? String }
-        #expect(cursorCommands.first
-                == "\(quoted) capture --client cursor; (nohup \(quoted) drain --hook-background &)")
+        #expect(cursorCommands.first == expectedCursor)
 
         let antigravity = AntigravityHookInstaller.merged(into: [:], binaryPath: binary)
         let antigravityHook = antigravity["hypermnesia"] as! [String: Any]
         let antigravityCommands = (antigravityHook["Stop"] as! [[String: Any]])
             .compactMap { $0["command"] as? String }
-        #expect(antigravityCommands.first
-                == "\(quoted) capture --client antigravity; (nohup \(quoted) drain --hook-background &)")
+        #expect(antigravityCommands.first == expectedAntigravity)
 
-        #expect((claudeCommands + cursorCommands + antigravityCommands)
-            .allSatisfy { !$0.contains("/dev/null") })
+        for command in [expectedClaude, expectedCursor, expectedAntigravity] {
+            #expect(!command.contains("/dev/null"))
+            #expect(command.contains("drain.log"))
+            #expect(command.contains("mkdir -p"))
+        }
     }
 
     @Test("background drain log rotates at the cap with private permissions")

@@ -859,6 +859,7 @@ final class AppModel {
 
     /// Phase 2: the user said yes — classify everything queued, narrating per-session progress,
     /// and land a first-ever backfill on the MRI so they watch their history light up.
+    /// Snapshot+enqueue copies can take seconds on large histories; keep that off the MainActor.
     func confirmBackfill() {
         guard let store, let proposal = backfillProposal else { return }
         backfillProposal = nil
@@ -866,16 +867,21 @@ final class AppModel {
         // The first dream runs over the project the backfill enriched most — decided now, priced
         // into the consent dialog the user just accepted ("+ 1 dream pass").
         let firstDreamProject = willRunFirstDream ? Self.dominantProject(in: proposal) : nil
-        let enqueued = BackfillProposalService.enqueue(proposal, store: store)
-        guard enqueued > 0 else {
-            processingStatus = "No new sessions found."
-            return
-        }
         isProcessing = true
         let wasEmpty = projects.isEmpty
-        processingStatus = "Classifying \(enqueued) session\(enqueued == 1 ? "" : "s")…"
+        let count = proposal.count
+        processingStatus = "Queuing \(count) session\(count == 1 ? "" : "s")…"
         Task { [weak self] in
             guard let self else { return }
+            let enqueued = await Task.detached {
+                BackfillProposalService.enqueue(proposal, store: store)
+            }.value
+            guard enqueued > 0 else {
+                self.isProcessing = false
+                self.processingStatus = "No new sessions found."
+                return
+            }
+            self.processingStatus = "Classifying \(enqueued) session\(enqueued == 1 ? "" : "s")…"
             let report = await Task.detached {
                 await SessionIngestor.drainQueue(
                     store: store, classifier: Classifiers.makeFromConfig(),

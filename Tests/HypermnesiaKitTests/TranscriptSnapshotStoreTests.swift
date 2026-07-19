@@ -42,4 +42,23 @@ struct TranscriptSnapshotStoreTests {
 
         #expect(FileManager.default.fileExists(atPath: source.path))
     }
+
+    @Test("removeIfManaged skips a snapshot refreshed after the row was enqueued")
+    func retainsFresherSnapshot() throws {
+        let support = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hypermnesia-snapshot-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: support) }
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        let source = support.appendingPathComponent("source.jsonl")
+        try "first\n".write(to: source, atomically: true, encoding: .utf8)
+        let path = try TranscriptSnapshotStore.snapshot(
+            transcript: source, sessionId: "s", in: support)
+        let enqueuedAt = Date().addingTimeInterval(-10)
+        try "second\n".write(to: source, atomically: true, encoding: .utf8)
+        _ = try TranscriptSnapshotStore.snapshot(transcript: source, sessionId: "s", in: support)
+
+        TranscriptSnapshotStore.removeIfManaged(path.path, in: support, enqueuedAt: enqueuedAt)
+        #expect(FileManager.default.fileExists(atPath: path.path))
+        #expect(try String(contentsOf: path, encoding: .utf8) == "second\n")
+    }
 }

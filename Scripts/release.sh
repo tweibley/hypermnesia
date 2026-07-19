@@ -59,6 +59,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Hypermnesia focuses the exact terminal tab of a coding session when you click its notch status card.</string>
 ${SPARKLE_PLIST_KEYS}
 </dict>
 </plist>
@@ -71,11 +73,17 @@ if [ -z "$IDENTITY" ]; then IDENTITY="$(find_id 'Apple Development')"; TYPE="App
 if [ -z "$IDENTITY" ]; then IDENTITY="$(find_id 'Mac Developer')"; TYPE="Mac Developer (local only)"; fi
 if [ -z "$IDENTITY" ]; then IDENTITY="-"; TYPE="ad-hoc (local only)"; fi
 
+ENTITLEMENTS="packaging/Hypermnesia.entitlements"
+
 echo "▸ Signing — $TYPE"
 # Sign nested Mach-O (the CLI) first, then the outer app bundle. Both need hardened runtime
-# (--options runtime) so notarization accepts every executable in the bundle.
-sign() { codesign --force --options runtime --timestamp --sign "$IDENTITY" "$1" 2>/dev/null \
-       || codesign --force --options runtime --sign "$IDENTITY" "$1"; }   # retry without timestamp if offline
+# (--options runtime) so notarization accepts every executable in the bundle. The outer app gets
+# Apple Events entitlement so notch click-back can focus terminal/IDE tabs under hardened runtime.
+sign() {
+  local target="$1"; shift
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" "$@" "$target" 2>/dev/null \
+    || codesign --force --options runtime --sign "$IDENTITY" "$@" "$target"
+}
 # Sparkle's nested executables, innermost first (per Sparkle's notarization docs; no --deep).
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
 for nested in "$SPARKLE/XPCServices/Downloader.xpc" "$SPARKLE/XPCServices/Installer.xpc" \
@@ -84,7 +92,7 @@ for nested in "$SPARKLE/XPCServices/Downloader.xpc" "$SPARKLE/XPCServices/Instal
   [ -e "$nested" ] && sign "$nested"
 done
 sign "$APP/Contents/Resources/hypermnesia"
-sign "$APP"
+sign "$APP" --entitlements "$ENTITLEMENTS"
 codesign --verify --verbose=1 "$APP" && echo "  ✓ signature valid"
 
 # Notarize only with a Developer ID cert and a stored notarytool credential profile.

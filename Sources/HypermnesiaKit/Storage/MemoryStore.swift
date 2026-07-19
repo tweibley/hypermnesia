@@ -314,6 +314,8 @@ public final class MemoryStore: Sendable {
     /// Delete finished (done/error) capture-queue rows older than the retention window. Terminal
     /// rows are only useful for short-term inspection (`drain --dry-run`, doctor); without pruning
     /// they accumulate one per session forever. Pending/processing rows are never touched.
+    /// Managed snapshots are removed only when no surviving queue row still points at them — a
+    /// done row and a later live re-enqueue share `sha256(sessionId).jsonl`.
     @discardableResult
     public func pruneFinishedCaptures(
         olderThanDays days: Int = 30,
@@ -321,40 +323,70 @@ public final class MemoryStore: Sendable {
         supportDirectory: URL = StoreLocation.supportDirectory
     ) throws -> Int {
         let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
-        let paths = try dbQueue.write { db in
+        let asOf = Date()   // a hook re-snapshotting after this point must not lose its file
+        let (removedCount, orphanPaths) = try dbQueue.write { db -> (Int, [String]) in
             let rows = try CaptureQueueItem
                 .filter([CaptureStatus.done.rawValue, CaptureStatus.error.rawValue].contains(Column("status")))
                 .filter(Column("enqueuedAt") < cutoff)
                 .fetchAll(db)
+            let paths = rows.map(\.transcriptPath)
             _ = try CaptureQueueItem
                 .filter(rows.map(\.id).contains(Column("id")))
                 .deleteAll(db)
-            return rows.map(\.transcriptPath)
+            return (rows.count, try Self.unreferencedTranscriptPaths(paths, db: db))
         }
-        paths.forEach { TranscriptSnapshotStore.removeIfManaged($0, in: supportDirectory) }
-        return paths.count
+        orphanPaths.forEach { TranscriptSnapshotStore.removeIfManaged($0, in: supportDirectory, enqueuedAt: asOf) }
+        return removedCount
     }
 
     /// Remove terminal failures without touching memories, transcripts owned by agent clients, or
-    /// active queue work. Managed transcript snapshots are deleted with their queue rows.
+    /// active queue work. Managed transcript snapshots are deleted only when unreferenced.
     @discardableResult
     public func clearFailedCaptures(
         supportDirectory: URL = StoreLocation.supportDirectory
     ) throws -> Int {
-        let paths = try dbQueue.write { db in
+        let asOf = Date()   // a hook re-snapshotting after this point must not lose its file
+        let (removedCount, orphanPaths) = try dbQueue.write { db -> (Int, [String]) in
             let rows = try CaptureQueueItem
                 .filter(Column("status") == CaptureStatus.error.rawValue)
                 .fetchAll(db)
+            let paths = rows.map(\.transcriptPath)
             _ = try CaptureQueueItem
                 .filter(Column("status") == CaptureStatus.error.rawValue)
                 .deleteAll(db)
-            return rows.map(\.transcriptPath)
+            return (rows.count, try Self.unreferencedTranscriptPaths(paths, db: db))
         }
-        paths.forEach { TranscriptSnapshotStore.removeIfManaged($0, in: supportDirectory) }
-        return paths.count
+        orphanPaths.forEach { TranscriptSnapshotStore.removeIfManaged($0, in: supportDirectory, enqueuedAt: asOf) }
+        return removedCount
+    }
+
+    /// True when another queue row (not `excludingId`) still points at `path` — used before
+    /// deleting a managed snapshot after a drain completes.
+    public func isTranscriptPathReferenced(_ path: String, excludingId: String) throws -> Bool {
+        try dbQueue.read { db in
+            try CaptureQueueItem
+                .filter(Column("transcriptPath") == path)
+                .filter(Column("id") != excludingId)
+                .fetchCount(db) > 0
+        }
+    }
+
+    /// Among `paths`, those no longer referenced by any remaining capture_queue row.
+    private static func unreferencedTranscriptPaths(_ paths: [String], db: Database) throws -> [String] {
+        let unique = Array(Set(paths))
+        guard !unique.isEmpty else { return [] }
+        let stillHeld = Set(
+            try CaptureQueueItem
+                .filter(unique.contains(Column("transcriptPath")))
+                .fetchAll(db)
+                .map(\.transcriptPath)
+        )
+        return unique.filter { !stillHeld.contains($0) }
     }
 
     /// Enqueue a session, or refresh the existing not-done item for it (one active item per session).
+    /// A fresh enqueue resets the retry budget — a new Stop/SessionEnd (or confirmed backfill) is
+    /// new work, not another attempt at a prior failure.
     public func enqueueOrUpdate(
         sessionId: String, projectId: String, transcriptPath: String, cwd: String,
         gitSha: String?, gitBranch: String?, isFinal: Bool, source: CaptureSource = .live
@@ -367,6 +399,8 @@ public final class MemoryStore: Sendable {
                 .fetchOne(db) {
                 existing.enqueuedAt = Date()
                 existing.status = .pending
+                existing.attempts = 0
+                existing.lastError = nil
                 existing.transcriptPath = transcriptPath
                 if isFinal { existing.isFinal = true }
                 existing.source = source

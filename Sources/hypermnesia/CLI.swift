@@ -515,18 +515,21 @@ struct Capture: AsyncParsableCommand {
         }
 
         // The host may delete its transcript as soon as this hook returns. Snapshot it before
-        // enqueueing so the out-of-band drain never races a host-owned temporary file.
+        // enqueueing so the out-of-band drain never races a host-owned temporary file. If the
+        // snapshot fails (disk full, source already gone), still enqueue the host path — a later
+        // Stop/SessionEnd or drain retry may recover it; dropping the session silently is worse.
+        let hostTranscript = URL(fileURLWithPath: transcript)
         let queuedTranscript: URL
         do {
             queuedTranscript = try TranscriptSnapshotStore.snapshot(
-                transcript: URL(fileURLWithPath: transcript),
+                transcript: hostTranscript,
                 sessionId: sessionId
             )
         } catch {
-            HookIO.note("capture (\(client.rawValue)) skipped — could not snapshot transcript at \(transcript): "
-                + error.localizedDescription
+            HookIO.note("capture (\(client.rawValue)): snapshot failed at \(transcript) — "
+                + "enqueueing host path for retry: \(error.localizedDescription)"
                 + (client == .cursor ? " — enable transcript export in Cursor" : ""))
-            return
+            queuedTranscript = hostTranscript
         }
 
         // SessionEnd is the final flush; Stop is an in-session checkpoint.

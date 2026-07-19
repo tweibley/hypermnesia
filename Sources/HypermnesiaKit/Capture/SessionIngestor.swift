@@ -49,6 +49,11 @@ public enum SessionIngestor {
         do {
             parsedEvents = try TranscriptParser.parse(fileAt: transcript)
         } catch {
+            // Truly undecodable/unrecognized input will never grow memories — seal it so consented
+            // backfill does not re-propose the same session forever.
+            try? store.markProcessed(.init(
+                sessionId: sessionId, projectId: projectId, source: source, memoryCount: 0
+            ))
             return 0
         }
         let convo: Conversation?
@@ -151,7 +156,11 @@ public enum SessionIngestor {
             events = try TranscriptParser.parse(fileAt: transcript)
         } catch {
             if !FileManager.default.fileExists(atPath: transcript.path) {
-                return .failed(reason: "transcript missing", terminal: true)
+                // Managed snapshots are durable; if one is gone, retrying won't help. A host path
+                // that vanished mid-hook may reappear (or a later Stop may re-snapshot) — keep it
+                // retryable.
+                let terminal = TranscriptSnapshotStore.isManaged(transcript.path)
+                return .failed(reason: "transcript missing", terminal: terminal)
             }
             return .failed(reason: "transcript unreadable", terminal: false)
         }
@@ -292,7 +301,7 @@ public enum SessionIngestor {
                 // .processing — no concurrent re-enqueue of a newer final slice) and this was final.
                 let landed = (try? store.finishProcessing(id: item.id, status: .done)) ?? false
                 if landed {
-                    TranscriptSnapshotStore.removeIfManaged(item.transcriptPath)
+                    releaseManagedTranscriptIfSafe(item, store: store)
                 }
                 if landed && item.isFinal {
                     try? store.markProcessed(.init(
@@ -304,7 +313,7 @@ public enum SessionIngestor {
             case .waiting:
                 let landed = (try? store.finishProcessing(id: item.id, status: .done)) ?? false
                 if landed {
-                    TranscriptSnapshotStore.removeIfManaged(item.transcriptPath)
+                    releaseManagedTranscriptIfSafe(item, store: store)
                 }
                 // Nothing new to capture. If this was the *final* flush, the session is fully
                 // captured — seal it so backfill / "Process previous sessions" don't rediscover and
@@ -344,6 +353,14 @@ public enum SessionIngestor {
             ConflictEngine.sweep(store: store, projectId: projectId)
         }
         return DrainReport(added: total, failures: failures)
+    }
+
+    /// Drop a managed snapshot only when no other queue row still needs it, and only when a
+    /// concurrent re-snapshot has not refreshed the file past this row's `enqueuedAt`.
+    private static func releaseManagedTranscriptIfSafe(_ item: CaptureQueueItem, store: MemoryStore) {
+        let shared = (try? store.isTranscriptPathReferenced(item.transcriptPath, excludingId: item.id)) ?? true
+        guard !shared else { return }
+        TranscriptSnapshotStore.removeIfManaged(item.transcriptPath, enqueuedAt: item.enqueuedAt)
     }
 
     /// Re-triage existing drafts through the current auto-confirm policy — drafts that piled up
