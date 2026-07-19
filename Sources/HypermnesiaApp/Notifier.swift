@@ -47,14 +47,15 @@ enum Notifier {
         let scope = projects.count == 1
             ? projectDisplayName(projects.first ?? "")
             : "\(projects.count) projects"
+        let body = "Hypermnesia dreamed — \(parts.joined(separator: ", ")) for \(scope). "
+            + "Open the Dream Journal."
 
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .badge]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
             content.title = "Hypermnesia"
-            content.body = "Hypermnesia dreamed — \(parts.joined(separator: ", ")) for \(scope). "
-                + "Open the Dream Journal."
+            content.body = body
             center.add(UNNotificationRequest(
                 identifier: "dream-digest-\(UUID().uuidString)", content: content, trigger: nil))
         }
