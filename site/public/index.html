@@ -8,11 +8,17 @@
 <link rel="canonical" href="https://hypermnesia.app/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Hypermnesia">
 <meta property="og:url" content="https://hypermnesia.app/">
 <meta property="og:title" content="Hypermnesia — durable, decaying memory for your coding agents">
 <meta property="og:description" content="Local-first memory for Claude Code, Cursor, and Google Antigravity. Captured from real sessions, typed, decaying, injected back when relevant. No telemetry.">
 <meta property="og:image" content="https://hypermnesia.app/media/og.jpg">
+<meta property="og:image:width" content="2560">
+<meta property="og:image:height" content="1280">
+<meta property="og:image:alt" content="Hypermnesia — local-first, decaying memory for coding agents.">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://hypermnesia.app/media/og.jpg">
+<meta name="twitter:image:alt" content="Hypermnesia — local-first, decaying memory for coding agents.">
 <meta name="theme-color" content="#0b0812">
 <link rel="preload" href="/fonts/instrumentserif-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/ibmplexmono-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -28,7 +34,60 @@
   "url": "https://hypermnesia.app/",
   "softwareVersion": "0.1.1",
   "license": "https://github.com/tweibley/hypermnesia/blob/main/LICENSE",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
   "description": "A local-first memory system that gives Claude Code, Cursor, and Google Antigravity a durable, decaying, queryable memory of every project."
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Why not just CLAUDE.md?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Hypermnesia writes your CLAUDE.md — hypermnesia export --markdown renders a project's confirmed memory as a committable MEMORY.md. The difference is everything around that file: memories decay unless they keep proving useful, carry applied/overridden evidence counters, are retired by newer contradicting captures, and are injected by relevance instead of as one ever-growing preamble. A hand-tended CLAUDE.md goes stale silently; here staleness is a first-class, visible state."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Isn't this just RAG?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The retrieval part is deliberately boring (FTS5 + embeddings). The interesting parts sit around it: capture is automatic from real sessions; memories are typed, with structure like \"does NOT apply to\"; contradictions are detected at capture time; and decay + belief decide whether a memory is still trustworthy, not just similar. On explicit-memory tasks, hydration matched a paste-the-fact-into-the-prompt oracle."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does injected memory ever hurt?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Measured: yes, once — memory injection broke 1 of 18 adversarial control tasks that the baseline passed. The mitigations are structural: overridden memories lose belief, stale ones fall below the injection floor until revalidated, and risky writes land as drafts you confirm before they hydrate anything."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does it slow sessions down or eat tokens?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Hydration injects a small, bounded set: confirmed memories above a confidence floor at session start, and up to 8 relevance-ranked ones per prompt. Capture is asynchronous — hooks checkpoint and return; classification runs out-of-band, so nothing blocks the session. The only recurring spend is classification, on the model you choose."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why macOS-only? Will there be a Linux build?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The engine and CLI are UI-free Swift over GRDB/SQLite — nothing in the capture-to-hydrate loop is macOS-specific; the SwiftUI app is. A headless Linux build of the CLI + hooks is plausible; it just isn't built or tested yet."
+      }
+    }
+  ]
 }
 </script>
 <noscript><style>.reveal{opacity:1;transform:none}.bench-bar{width:var(--w)}</style></noscript>
@@ -181,6 +240,7 @@
         <p>The relevant, still-trustworthy memories are injected into new sessions at start, and per-prompt by relevance — a small, bounded, confidence-gated set.</p>
       </li>
     </ol>
+    <p class="loop-return reveal"><span class="lr-glyph" aria-hidden="true">↺</span> back to 01 — a hydrated session is itself captured; the loop closes.</p>
   </section>
 
   <!-- ============ PRIVACY ============ -->
@@ -188,10 +248,10 @@
     <p class="kicker reveal">04&nbsp;/&nbsp;Privacy</p>
     <h2 class="reveal">Local-first, verifiably</h2>
     <ul class="manifest">
-      <li class="reveal"><span class="m-key">store</span> one SQLite file — <code>~/Library/Application&nbsp;Support/Hypermnesia/memory.db</code></li>
-      <li class="reveal"><span class="m-key">telemetry</span> none. No accounts, no cloud store.</li>
-      <li class="reveal"><span class="m-key">leaves your machine</span> exactly two things, both to the classifier <em>you</em> configure: transcript slices for classification, and stored memory summaries plus your question for <code>ask</code>. That’s the whole list — the threat model is in <a href="https://github.com/tweibley/hypermnesia/blob/main/SECURITY.md">SECURITY.md&nbsp;↗</a>.</li>
-      <li class="reveal"><span class="m-key">this site</span> the same way — self-hosted fonts, zero third-party requests, no analytics.</li>
+      <li class="reveal"><span class="m-key">store</span> <span class="m-val">one SQLite file — <code>~/Library/Application&nbsp;Support/Hypermnesia/memory.db</code></span></li>
+      <li class="reveal"><span class="m-key">telemetry</span> <span class="m-val">none. No accounts, no cloud store.</span></li>
+      <li class="reveal"><span class="m-key">leaves your machine</span> <span class="m-val">exactly two things, both to the classifier <em>you</em> configure: transcript slices for classification, and stored memory summaries plus your question for <code>ask</code>. That’s the whole list — the threat model is in <a href="https://github.com/tweibley/hypermnesia/blob/main/SECURITY.md">SECURITY.md&nbsp;↗</a>.</span></li>
+      <li class="reveal"><span class="m-key">this site</span> <span class="m-val">the same way — self-hosted fonts, zero third-party requests, no analytics.</span></li>
     </ul>
   </section>
 
