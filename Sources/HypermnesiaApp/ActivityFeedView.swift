@@ -86,6 +86,11 @@ struct ActivityFeedView: View {
             }
             return "Decay transition"
         case .supersede: return "A newer memory retired an older one"
+        case .dream:
+            let skills = event.metadata["skills"].flatMap(Int.init) ?? 0
+            var line = "Dreamed: \(n) epiphan\(n == 1 ? "y" : "ies")"
+            if skills > 0 { line += ", \(skills) skill proposal\(skills == 1 ? "" : "s")" }
+            return line
         }
     }
 
@@ -99,6 +104,7 @@ struct ActivityFeedView: View {
         case .revalidate: "arrow.clockwise"
         case .decayTransition: "hourglass"
         case .supersede: "arrow.triangle.2.circlepath"
+        case .dream: "moon.zzz.fill"
         }
     }
 

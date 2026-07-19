@@ -152,3 +152,13 @@ extension GeminiClassifier: Completer {
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+extension GeminiClassifier: DreamCompleter {
+    /// Guaranteed-JSON completion via mime-only JSON mode (no schema — see the type doc for why a
+    /// schema must stay absent). Used by `DreamRunner`.
+    public func completeJSON(system: String, user: String) async throws -> String {
+        let text = try await generate(system: system, input: user, temperature: temperature, json: true)
+        guard !text.isEmpty else { throw ClassifierError.emptyOutput }
+        return text
+    }
+}

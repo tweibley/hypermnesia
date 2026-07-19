@@ -29,6 +29,31 @@ final class NotchStatusController {
     /// unanswered attention cards anyway.
     private var dismissedEventIds: Set<String> = []
     private var dismissedOrder: [String] = []
+    /// Synthetic "Dreamed" card shown while a dream is unread. Not appended to the event log —
+    /// AppModel sets it from the store, so it survives TTLs and clears on read/dismiss. The event
+    /// id is the journal entry id: dismissing tonight's chip stays dismissed, a NEW dream pops.
+    private var dreamChip: SessionEvent?
+
+    /// Update (or clear) the dream chip from the unread journal entries.
+    func setDreamChip(unread: [DreamJournalEntry]) {
+        guard let newest = unread.first else {
+            if dreamChip != nil { dreamChip = nil; refresh() }
+            return
+        }
+        let epiphanies = unread.reduce(0) { $0 + $1.payload.epiphanies.count }
+        let skills = unread.reduce(0) { $0 + $1.payload.skillProposals.count }
+        var summary = "\(epiphanies) epiphan\(epiphanies == 1 ? "y" : "ies")"
+        if skills > 0 { summary += ", \(skills) skill proposal\(skills == 1 ? "" : "s")" }
+        let chip = SessionEvent(
+            id: newest.id,
+            timestamp: newest.createdAt,
+            kind: .finished,
+            client: "hypermnesia",
+            sessionId: "dream-journal",
+            projectId: newest.projectId,
+            title: "Dreamed — \(summary). Click to open the journal.")
+        if dreamChip != chip { dreamChip = chip; refresh() }
+    }
 
     func start() {
         guard panel == nil else { return }
@@ -82,6 +107,13 @@ final class NotchStatusController {
         // (crashed agent, closed terminal), the turn can't still be running.
         working.removeAll { !$0.event.isDemo && !Self.hostLooksAlive($0.event) }
 
+        // The quiet "Dreamed" chip: rides the same card pipeline but is store-backed (no TTL) —
+        // it exists exactly while a dream is unread and not dismissed. No hostPids, so the
+        // frontmost filter below never hides it.
+        if let chip = dreamChip, !dismissedEventIds.contains(chip.id) {
+            cards.append(SessionEventFeed.Card(event: chip))
+        }
+
         // You're already looking at that session's app — hide the pop for now. Do NOT permanently
         // dismiss: hostPids is per-app, not per-tab, so another Claude/Cursor tab in the same host
         // would otherwise never resurface when you leave this one. Click/explicit dismiss still
@@ -104,6 +136,13 @@ final class NotchStatusController {
     func activate(_ card: SessionEventFeed.Card) {
         if card.event.kind != .working {
             markDismissed(card.event.id)
+        }
+        // The dream chip jumps into the Dream Journal, not a host session.
+        if card.event.client == "hypermnesia" {
+            WindowSupport.bringToFront()
+            NotificationCenter.default.post(name: .hypermnesiaOpenDreamJournal, object: nil)
+            refresh()
+            return
         }
         SessionFocus.focus(card.event)
         refresh()

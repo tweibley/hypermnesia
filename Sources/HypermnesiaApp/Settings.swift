@@ -378,7 +378,7 @@ final class SettingsModel {
 // MARK: - Settings window
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case onboarding, cursor, antigravity, classifier, capture, hydration, notch, storage, about
+    case onboarding, cursor, antigravity, classifier, capture, hydration, dreams, notch, storage, about
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -388,6 +388,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .classifier: "Classifier"
         case .capture: "Capture"
         case .hydration: "Hydration"
+        case .dreams: "Dreams"
         case .notch: "Notch"
         case .storage: "Storage"
         case .about: "About"
@@ -401,6 +402,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .classifier: "brain.head.profile"
         case .capture: "dot.radiowaves.left.and.right"
         case .hydration: "drop.fill"
+        case .dreams: "moon.zzz.fill"
         case .notch: "menubar.dock.rectangle"
         case .storage: "externaldrive"
         case .about: "info.circle"
@@ -448,6 +450,7 @@ struct SettingsView: View {
                     case .classifier: ClassifierSettings(model: model)
                     case .capture: CaptureSettings(model: model)
                     case .hydration: HydrationSettings(model: model)
+                    case .dreams: DreamsSettings(model: model)
                     case .notch: NotchSettings(model: model)
                     case .storage: StorageSettings()
                     case .about: AboutSettings(model: model)
@@ -863,6 +866,92 @@ private struct MCPServerNudge: View {
             }
         }
         .padding(.leading, 4)
+    }
+}
+
+private struct DreamsSettings: View {
+    @Bindable var model: SettingsModel
+
+    var body: some View {
+        SectionHeader(
+            title: "Memory Dreams",
+            subtitle: "After your Mac wakes and goes idle, Hypermnesia reflects over recent Claude Code, Cursor, and Antigravity sessions — epiphanies with receipts, draft memories, and skill proposals in a morning journal."
+        )
+
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: $model.config.dreamsEnabled) {
+                    Text("Dream while I'm away")
+                    Text(estimateLine)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Divider()
+                Picker(selection: $model.config.dreamDigestCadence) {
+                    Text("Every morning").tag("nightly")
+                    Text("Weekly").tag("weekly")
+                    Text("Never").tag("off")
+                } label: {
+                    Text("Morning digest")
+                    Text("One notification across all projects. Quiet nights never notify.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.dreamsEnabled)
+                Stepper(value: $model.config.dreamLookbackDays, in: 1...14) {
+                    Text("Read the last \(model.config.dreamLookbackDays) day\(model.config.dreamLookbackDays == 1 ? "" : "s") of sessions")
+                }
+                .disabled(!model.config.dreamsEnabled)
+                Stepper(value: $model.config.dreamNightlyCallCap, in: 0...20) {
+                    Text(model.config.dreamNightlyCallCap == 0
+                         ? "No nightly call cap"
+                         : "At most \(model.config.dreamNightlyCallCap) classifier call\(model.config.dreamNightlyCallCap == 1 ? "" : "s") per night")
+                    Text("One call per project per night; projects beyond the cap roll to the next night, most recently active first.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.dreamsEnabled)
+            }
+            .padding(6)
+        }
+
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: $model.config.dreamProposeMemories) {
+                    Text("Propose draft memories")
+                    Text("Dreams never confirm anything themselves — drafts go through the normal review inbox.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.dreamsEnabled)
+                Toggle(isOn: $model.config.dreamProposeSkills) {
+                    Text("Propose skills")
+                    Text("Only when the same friction shows up in at least two sessions, quoted verbatim. Installing is always a separate, explicit step.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.dreamsEnabled)
+                Picker(selection: $model.config.dreamSkillTarget) {
+                    Text("This project (.claude/skills)").tag("project")
+                    Text("Every project (~/.claude/skills)").tag("user")
+                } label: {
+                    Text("Default skill install target")
+                    Text("Detected Cursor and Antigravity skill folders are mirrored automatically — never invented.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.dreamsEnabled || !model.config.dreamProposeSkills)
+            }
+            .padding(6)
+        }
+
+        Text("Guards: dreams only run after ~3 minutes of true idle, never below 30% battery, and stop the moment you're back. Every night's calls and estimated cost are recorded in the journal.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private var estimateLine: String {
+        let label = DreamCompleters.label(model.config)
+        let perCall = DreamCompleters.estimatedCostPerCallUSD(label: label)
+        let cap = model.config.dreamNightlyCallCap
+        let monthly = perCall * Double(cap == 0 ? 4 : cap) * 30
+        return "Runs while the Mac is idle. Estimated cost: up to "
+            + String(format: "~$%.2f", monthly)
+            + "/month at the \(cap == 0 ? 4 : cap)-call nightly cap with \(label)."
     }
 }
 

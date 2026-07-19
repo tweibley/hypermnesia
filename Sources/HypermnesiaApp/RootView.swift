@@ -447,6 +447,15 @@ struct DetailView: View {
                 }
             }
             ToolbarItem {
+                Button { model.openDreamJournal() } label: {
+                    Image(systemName: model.unreadDreamCount > 0 ? "moon.zzz.fill" : "moon.zzz")
+                        .foregroundStyle(model.unreadDreamCount > 0 ? Color.brand : Color.primary)
+                }
+                .help(model.unreadDreamCount > 0
+                      ? "Dream Journal — \(model.unreadDreamCount) unread dream\(model.unreadDreamCount == 1 ? "" : "s")"
+                      : "Dream Journal")
+            }
+            ToolbarItem {
                 Button { showAsk = true } label: { Image(systemName: "sparkles") }
                     .help("Ask a question about this project")
             }
@@ -456,6 +465,21 @@ struct DetailView: View {
         }
         .sheet(isPresented: $showAsk) {
             MemoryQuerySheet().environment(model)
+        }
+        .sheet(isPresented: $model.dreamJournalShown) {
+            DreamJournalView().environment(model)
+        }
+        .overlay {
+            if let entry = model.remEntry {
+                DreamRemView(entry: entry) { openJournal in
+                    model.remEntry = nil
+                    if openJournal { model.openDreamJournal() }
+                }
+                .transition(.opacity)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hypermnesiaOpenDreamJournal)) { _ in
+            model.openDreamJournal()
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search memories")
         .onChange(of: model.searchFocusRequestID) { _, _ in
@@ -483,7 +507,10 @@ struct DetailView: View {
             }
             Button("Cancel", role: .cancel) { model.cancelBackfill() }
         } message: {
-            Text("Each session is classified with your configured model — roughly one API call per session on your key. You can watch progress and keep using the app while it runs.")
+            // Consent is priced exactly: the first dream is included only when it will actually run.
+            Text(model.willRunFirstDream
+                 ? "Each Claude Code, Cursor, or Antigravity session is classified with your configured model — roughly one API call per session on your key, + 1 dream pass (~1 call) that reflects over the fresh corpus and writes your first Dream Journal entry. You can watch progress and keep using the app while it runs."
+                 : "Each Claude Code, Cursor, or Antigravity session is classified with your configured model — roughly one API call per session on your key. You can watch progress and keep using the app while it runs.")
         }
         .inspector(isPresented: Binding(
             get: { model.selectedMemoryID != nil },

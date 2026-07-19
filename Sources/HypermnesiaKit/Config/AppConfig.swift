@@ -38,6 +38,22 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// Ambient presence: a slim "N working" strip hangs from the notch while agents are mid-turn
     /// (hover to see the sessions). Never pops — it just exists.
     public var notchShowWorking: Bool
+    /// Memory Dreams: the idle-after-wake consolidation pass. Off by default — enabling shows a
+    /// cost estimate first (one classifier call per project per night, capped).
+    public var dreamsEnabled: Bool
+    /// Morning digest cadence: "nightly" | "weekly" | "off". Quiet nights never notify.
+    public var dreamDigestCadence: String
+    /// How many days of sessions a dream reads.
+    public var dreamLookbackDays: Int
+    /// Let dreams propose draft memories (through the normal triage inbox).
+    public var dreamProposeMemories: Bool
+    /// Let dreams stage skill proposals (install is always a separate explicit confirm).
+    public var dreamProposeSkills: Bool
+    /// Default install target for dream skills: "project" (.claude/skills) | "user" (~/.claude/skills).
+    public var dreamSkillTarget: String
+    /// Max classifier calls per night across all projects (0 = uncapped). Projects beyond the cap
+    /// roll to the next night, most recently active first.
+    public var dreamNightlyCallCap: Int
 
     public init(
         classifier: String = "auto",
@@ -55,7 +71,14 @@ public struct AppConfig: Codable, Sendable, Equatable {
         notchEnabled: Bool = true,
         notchOnAgentFinish: Bool = true,
         notchOnNeedsAttention: Bool = true,
-        notchShowWorking: Bool = true
+        notchShowWorking: Bool = true,
+        dreamsEnabled: Bool = false,
+        dreamDigestCadence: String = "nightly",
+        dreamLookbackDays: Int = 3,
+        dreamProposeMemories: Bool = true,
+        dreamProposeSkills: Bool = true,
+        dreamSkillTarget: String = "project",
+        dreamNightlyCallCap: Int = 4
     ) {
         self.classifier = classifier
         self.geminiModel = geminiModel
@@ -73,6 +96,13 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.notchOnAgentFinish = notchOnAgentFinish
         self.notchOnNeedsAttention = notchOnNeedsAttention
         self.notchShowWorking = notchShowWorking
+        self.dreamsEnabled = dreamsEnabled
+        self.dreamDigestCadence = dreamDigestCadence
+        self.dreamLookbackDays = dreamLookbackDays
+        self.dreamProposeMemories = dreamProposeMemories
+        self.dreamProposeSkills = dreamProposeSkills
+        self.dreamSkillTarget = dreamSkillTarget
+        self.dreamNightlyCallCap = dreamNightlyCallCap
     }
 
     // Lenient decoding so older/newer config files keep working as fields evolve.
@@ -97,6 +127,13 @@ public struct AppConfig: Codable, Sendable, Equatable {
         notchOnNeedsAttention = try c.decodeIfPresent(Bool.self, forKey: .notchOnNeedsAttention)
             ?? d.notchOnNeedsAttention
         notchShowWorking = try c.decodeIfPresent(Bool.self, forKey: .notchShowWorking) ?? d.notchShowWorking
+        dreamsEnabled = try c.decodeIfPresent(Bool.self, forKey: .dreamsEnabled) ?? d.dreamsEnabled
+        dreamDigestCadence = try c.decodeIfPresent(String.self, forKey: .dreamDigestCadence) ?? d.dreamDigestCadence
+        dreamLookbackDays = try c.decodeIfPresent(Int.self, forKey: .dreamLookbackDays) ?? d.dreamLookbackDays
+        dreamProposeMemories = try c.decodeIfPresent(Bool.self, forKey: .dreamProposeMemories) ?? d.dreamProposeMemories
+        dreamProposeSkills = try c.decodeIfPresent(Bool.self, forKey: .dreamProposeSkills) ?? d.dreamProposeSkills
+        dreamSkillTarget = try c.decodeIfPresent(String.self, forKey: .dreamSkillTarget) ?? d.dreamSkillTarget
+        dreamNightlyCallCap = try c.decodeIfPresent(Int.self, forKey: .dreamNightlyCallCap) ?? d.dreamNightlyCallCap
     }
 }
 

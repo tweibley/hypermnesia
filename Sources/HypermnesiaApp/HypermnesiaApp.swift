@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UserNotifications
 import HypermnesiaKit
 
 @main
@@ -73,11 +74,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if ProcessInfo.processInfo.environment["HYPERMNESIA_SHARE_PREVIEW_DIR"] == nil {
             NotchStatusController.shared.start()
         }
+        // Clicking the dream digest routes into the Dream Journal (bare SwiftPM runs have no
+        // bundle identity, so UNUserNotificationCenter is only touched from a real .app).
+        if Bundle.main.bundleIdentifier != nil {
+            UNUserNotificationCenter.current().delegate = self
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         WindowSupport.bringToFront()
         return true
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let identifier = response.notification.request.identifier
+        if identifier.hasPrefix("dream-digest") {
+            Task { @MainActor in
+                WindowSupport.bringToFront()
+                NotificationCenter.default.post(name: .hypermnesiaOpenDreamJournal, object: nil)
+            }
+        }
+        completionHandler()
     }
 }
 
