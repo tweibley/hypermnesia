@@ -95,6 +95,15 @@ public struct ClaudeHeadlessClassifier: Classifier {
     }
 }
 
+extension ClaudeHeadlessClassifier: DreamCompleter {
+    /// The CLI can't force JSON output (`--json-schema` returns empty), so JSON is prompt-enforced
+    /// and the caller parses defensively (`ClassifierJSON.extractObject` strips fences/prose). The
+    /// adapter's `timeout` is the hard ceiling on the subprocess.
+    public func completeJSON(system: String, user: String) async throws -> String {
+        try await complete(system: system, user: user)
+    }
+}
+
 extension ClaudeHeadlessClassifier: Completer {
     /// Free-form completion (plain text) — used for natural-language memory queries.
     public func complete(system: String, user: String) async throws -> String {

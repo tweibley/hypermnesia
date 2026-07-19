@@ -16,6 +16,7 @@ public struct MemoryActivityEvent: Codable, Sendable, Equatable, Identifiable {
         case revalidate
         case decayTransition = "decay_transition"
         case supersede
+        case dream
     }
 
     public let id: String

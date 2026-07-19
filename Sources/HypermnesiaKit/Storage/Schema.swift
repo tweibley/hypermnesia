@@ -200,6 +200,28 @@ enum Schema {
             }
         }
 
+        // v9: the Dream Journal — one row per project per night the dream loop RAN (dreamed or
+        // quiet). Nights with no row read as "skipped" in the 7-night strip. The structured result
+        // (epiphanies, proposals, report-backs, stats) lives in `payload` as JSON, mirroring
+        // memory_node.data, so the shape can evolve without migrations.
+        migrator.registerMigration("v9-dream-journal") { db in
+            try db.create(table: "dream_journal") { t in
+                t.primaryKey("id", .text)
+                t.column("projectId", .text).notNull()
+                t.column("night", .text).notNull()          // local calendar day, "yyyy-MM-dd"
+                t.column("createdAt", .datetime).notNull()
+                t.column("outcome", .text).notNull()        // dreamed | quiet
+                t.column("narrative", .text)
+                t.column("payload", .text).notNull()        // JSON DreamPayload
+                t.column("unread", .boolean).notNull().defaults(to: false)
+                t.column("calls", .integer).notNull().defaults(to: 0)
+                t.column("estCostUSD", .double)
+            }
+            try db.create(
+                index: "idx_dream_project_night", on: "dream_journal",
+                columns: ["projectId", "night"], unique: true)
+        }
+
         return migrator
     }
 }

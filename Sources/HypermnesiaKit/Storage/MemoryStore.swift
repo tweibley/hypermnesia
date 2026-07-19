@@ -4,7 +4,7 @@ import GRDB
 /// The local, on-device memory database. Thread-safe; safe to open from both the CLI and the app
 /// (WAL + busy timeout handle cross-process access). All methods are synchronous and throwing.
 public final class MemoryStore: Sendable {
-    private let dbQueue: DatabaseQueue
+    let dbQueue: DatabaseQueue   // internal: same-module extensions (DreamStore) add table access
 
     public init(location: StoreLocation = .default) throws {
         var config = Configuration()
