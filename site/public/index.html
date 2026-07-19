@@ -26,11 +26,12 @@
   "operatingSystem": "macOS 14+",
   "applicationCategory": "DeveloperApplication",
   "url": "https://hypermnesia.app/",
-  "softwareVersion": "0.1.0",
+  "softwareVersion": "0.1.1",
   "license": "https://github.com/tweibley/hypermnesia/blob/main/LICENSE",
   "description": "A local-first memory system that gives Claude Code, Cursor, and Google Antigravity a durable, decaying, queryable memory of every project."
 }
 </script>
+<noscript><style>.reveal{opacity:1;transform:none}.bench-bar{width:var(--w)}</style></noscript>
 </head>
 <body>
 
@@ -41,6 +42,7 @@
   </a>
   <nav aria-label="Site">
     <a href="#how">How it works</a>
+    <a href="#privacy">Privacy</a>
     <a href="#results">Results</a>
     <a href="#clients">Clients</a>
     <a href="#faq">FAQ</a>
@@ -58,20 +60,20 @@
     </p>
     <p class="definition reveal">unusually vivid or complete memory; <em>abnormally sharp recall of the past.</em></p>
 
-    <h1 class="tagline reveal">Durable, decaying memory<br>for your coding agents.</h1>
+    <h1 class="tagline reveal">Your coding agent forgets.<br>This is its memory.</h1>
 
     <p class="lede reveal">
       Hypermnesia is a <strong>local-first</strong> memory system for <strong>Claude&nbsp;Code</strong>,
-      <strong>Cursor</strong>, and <strong>Google&nbsp;Antigravity</strong>. Editor hooks capture every
-      session as it happens; an LLM classifies each transcript into typed memories; memories age and
-      decay unless they keep proving useful — and the relevant ones are injected back into future
-      sessions, so your agent remembers <em>why</em> the codebase is the way it is.
+      <strong>Cursor</strong>, and <strong>Google&nbsp;Antigravity</strong>. It captures the decisions
+      and conventions behind your codebase from real sessions, retires them when they go stale, and
+      injects the survivors into new ones — on-device, no telemetry, and measured: automatic hydration
+      took a memoryless agent from <strong>3/24 to 15/24</strong> on tasks whose answer existed only in memory.
     </p>
 
     <p class="cta-row reveal">
       <a class="btn btn-primary" href="https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip">⬇&nbsp;&nbsp;Download for macOS</a>
       <a class="btn btn-ghost" href="#start">Quick start&nbsp;↓</a>
-      <span class="cta-meta">MIT&nbsp;·&nbsp;macOS&nbsp;14+&nbsp;·&nbsp;v0.1.0</span>
+      <span class="cta-meta">v0.1.1&nbsp;·&nbsp;MIT&nbsp;·&nbsp;macOS&nbsp;14+&nbsp;·&nbsp;one&nbsp;SQLite&nbsp;file&nbsp;·&nbsp;one-command&nbsp;uninstall</span>
     </p>
 
     <figure class="viewer reveal">
@@ -91,9 +93,68 @@
     </figure>
   </section>
 
+  <!-- ============ THE PROBLEM ============ -->
+  <section id="problem" class="section">
+    <p class="kicker reveal">01&nbsp;/&nbsp;The problem</p>
+    <h2 class="reveal">Sessions end. Context dies.</h2>
+    <p class="section-lede reveal">Yesterday you told your agent the API speaks cents, not dollars. Today it suggests the float again. Every session re-litigates settled decisions, re-suggests banned patterns, and loses the <em>why</em> behind the code when the context window closes. That tax is paid per session, forever — unless something remembers.</p>
+    <div class="bench reveal" role="img" aria-label="Benchmark: a memoryless agent solved 3 of 24 tasks; the same agent with hydrated memory solved 15 of 24">
+      <div class="bench-row">
+        <span class="bench-label">same agent, no memory</span>
+        <span class="bench-track"><i class="bench-bar" style="--w:12.5%"></i></span>
+        <span class="bench-num">3<span>/24</span></span>
+      </div>
+      <div class="bench-row is-hot">
+        <span class="bench-label">same agent, memory hydrated</span>
+        <span class="bench-track"><i class="bench-bar" style="--w:62.5%"></i></span>
+        <span class="bench-num">15<span>/24</span></span>
+      </div>
+    </div>
+    <p class="caveat reveal">Tasks where the required convention exists <em>only</em> in memory. Same model, same tasks — the only variable is memory. Receipts, caveats, and the case where memory <em>hurt</em>: <a href="#results">05&nbsp;/&nbsp;Evals</a>.</p>
+  </section>
+
+  <!-- ============ THE ARTIFACT ============ -->
+  <section id="memory" class="section">
+    <p class="kicker reveal">02&nbsp;/&nbsp;The artifact</p>
+    <h2 class="reveal">What a memory actually looks like</h2>
+    <p class="section-lede reveal">Not a blob of chat history. Every capture is a typed record with scope rules, evidence counters, a decay state, and provenance it can be audited by.</p>
+
+    <article class="memcard reveal" aria-label="Example memory record (sample data)">
+      <header class="mem-head">
+        <span class="mem-type" style="--dot:#8b5cf6">convention</span>
+        <span class="mem-state d-fresh">fresh</span>
+        <span class="mem-belief">belief&nbsp;0.92</span>
+      </header>
+      <p class="mem-body">Timestamps are stored as UTC epoch millis; convert to local time at the UI edge only.</p>
+      <dl class="mem-rules">
+        <div><dt>applies to</dt><dd>persistence, API payloads, background jobs</dd></div>
+        <div class="not"><dt>does NOT apply to</dt><dd>one-off migration scripts replaying legacy rows</dd></div>
+      </dl>
+      <footer class="mem-meta">
+        <span>applied&nbsp;14×&nbsp;·&nbsp;overridden&nbsp;1×</span>
+        <span>captured from a real session&nbsp;·&nbsp;pinned to&nbsp;<code>a3f92c1</code></span>
+      </footer>
+    </article>
+    <p class="caveat reveal">A representative record (sample data) — the same shape every capture takes.</p>
+
+    <div class="types reveal">
+      <p class="types-title">Seven types, not one blob</p>
+      <ul class="chips" aria-label="Memory types">
+        <li style="--dot:#a855f7">decision</li>
+        <li style="--dot:#8b5cf6">convention</li>
+        <li style="--dot:#22c55e">intent</li>
+        <li style="--dot:#22d3ee">fact</li>
+        <li style="--dot:#eab308">concern</li>
+        <li style="--dot:#6366f1">backlog</li>
+        <li style="--dot:#2dd4bf">code&nbsp;ref</li>
+      </ul>
+      <p class="types-note">The type decides how a memory behaves: conventions carry scope rules like the one above, concerns carry severity, decisions carry the rejected alternative — and code refs pin to commits and deep-link into your editor or GitHub.</p>
+    </div>
+  </section>
+
   <!-- ============ HOW IT WORKS ============ -->
   <section id="how" class="section">
-    <p class="kicker reveal">01&nbsp;/&nbsp;How it works</p>
+    <p class="kicker reveal">03&nbsp;/&nbsp;How it works</p>
     <h2 class="reveal">The loop</h2>
     <ol class="loop">
       <li class="reveal">
@@ -120,25 +181,23 @@
         <p>The relevant, still-trustworthy memories are injected into new sessions at start, and per-prompt by relevance — a small, bounded, confidence-gated set.</p>
       </li>
     </ol>
+  </section>
 
-    <div class="types reveal">
-      <p class="types-title">Seven types, not one blob</p>
-      <ul class="chips" aria-label="Memory types">
-        <li style="--dot:#a855f7">decision</li>
-        <li style="--dot:#8b5cf6">convention</li>
-        <li style="--dot:#22c55e">intent</li>
-        <li style="--dot:#22d3ee">fact</li>
-        <li style="--dot:#eab308">concern</li>
-        <li style="--dot:#6366f1">backlog</li>
-        <li style="--dot:#2dd4bf">code&nbsp;ref</li>
-      </ul>
-      <p class="types-note">Typed structure is what lets a memory carry rules like <em>“does NOT apply to…”</em>, applied/overridden evidence counters, and commit-pinned code references that deep-link into your editor or GitHub.</p>
-    </div>
+  <!-- ============ PRIVACY ============ -->
+  <section id="privacy" class="section">
+    <p class="kicker reveal">04&nbsp;/&nbsp;Privacy</p>
+    <h2 class="reveal">Local-first, verifiably</h2>
+    <ul class="manifest">
+      <li class="reveal"><span class="m-key">store</span> one SQLite file — <code>~/Library/Application&nbsp;Support/Hypermnesia/memory.db</code></li>
+      <li class="reveal"><span class="m-key">telemetry</span> none. No accounts, no cloud store.</li>
+      <li class="reveal"><span class="m-key">leaves your machine</span> exactly two things, both to the classifier <em>you</em> configure: transcript slices for classification, and stored memory summaries plus your question for <code>ask</code>. That’s the whole list — the threat model is in <a href="https://github.com/tweibley/hypermnesia/blob/main/SECURITY.md">SECURITY.md&nbsp;↗</a>.</li>
+      <li class="reveal"><span class="m-key">this site</span> the same way — self-hosted fonts, zero third-party requests, no analytics.</li>
+    </ul>
   </section>
 
   <!-- ============ RESULTS ============ -->
   <section id="results" class="section">
-    <p class="kicker reveal">02&nbsp;/&nbsp;Evals</p>
+    <p class="kicker reveal">05&nbsp;/&nbsp;Evals</p>
     <h2 class="reveal">Measured, honestly</h2>
     <div class="stats">
       <div class="stat reveal">
@@ -159,7 +218,7 @@
 
   <!-- ============ CLIENTS ============ -->
   <section id="clients" class="section">
-    <p class="kicker reveal">03&nbsp;/&nbsp;Setup</p>
+    <p class="kicker reveal">06&nbsp;/&nbsp;Setup</p>
     <h2 class="reveal">Three clients, one memory</h2>
     <p class="section-lede reveal">The same local store, captured from and injected into all three — with <code>recall</code>, <code>ask</code>, and <code>remember</code> available to each agent over MCP.</p>
     <div class="cards">
@@ -185,32 +244,18 @@ hypermnesia install-antigravity-hooks</code></pre>
     <p class="mcp-row reveal">Don’t wait for new sessions — seed from history: <code>hypermnesia backfill --project ~/some/repo</code> <span class="dim">(add <code>--client cursor</code> or <code>--client antigravity</code>)</span></p>
   </section>
 
-  <!-- ============ PRIVACY ============ -->
-  <section id="privacy" class="section">
-    <p class="kicker reveal">04&nbsp;/&nbsp;Privacy</p>
-    <h2 class="reveal">Local-first, verifiably</h2>
-    <ul class="manifest">
-      <li class="reveal"><span class="m-key">store</span> one SQLite file — <code>~/Library/Application&nbsp;Support/Hypermnesia/memory.db</code></li>
-      <li class="reveal"><span class="m-key">telemetry</span> none. No accounts, no cloud store.</li>
-      <li class="reveal"><span class="m-key">leaves your machine</span> exactly two things, both to the classifier <em>you</em> configure: transcript slices for classification, and stored memory summaries plus your question for <code>ask</code>. That’s the whole list — the threat model is in <a href="https://github.com/tweibley/hypermnesia/blob/main/SECURITY.md">SECURITY.md&nbsp;↗</a>.</li>
-      <li class="reveal"><span class="m-key">this site</span> the same way — self-hosted fonts, zero third-party requests, no analytics.</li>
-    </ul>
-  </section>
-
   <!-- ============ QUICK START ============ -->
   <section id="start" class="section">
-    <p class="kicker reveal">05&nbsp;/&nbsp;Install</p>
+    <p class="kicker reveal">07&nbsp;/&nbsp;Install</p>
     <h2 class="reveal">Quick start</h2>
     <p class="reveal" style="margin:0 0 1rem">
       <a class="btn btn-primary" href="https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip">⬇&nbsp;&nbsp;Download for macOS</a>
       <span style="margin-left:.75rem; opacity:.65; font-size:.9em">Universal binary · signed &amp; notarized · macOS&nbsp;14+</span>
     </p>
-    <p class="reveal" style="opacity:.8">Unzip, drag to Applications, open — the app walks you through setup, no terminal required (the CLI ships inside the app). Prefer a package manager?</p>
+    <p class="reveal" style="opacity:.8">Unzip, drag to Applications, open — the app walks you through setup, no terminal required (the CLI ships inside the app). Prefer the terminal? The bundled CLI does the same work headless:</p>
     <div class="codeblock reveal">
       <button class="copy" data-copy>copy</button>
-      <pre><code>brew tap tweibley/tap
-brew install --cask hypermnesia                <span class="cm"># notarized app + CLI on PATH</span>
-
+      <pre><code>alias hypermnesia=/Applications/Hypermnesia.app/Contents/Resources/hypermnesia
 hypermnesia backfill --project ~/some/repo     <span class="cm"># seed memory from past sessions</span>
 hypermnesia setup --with-mcp                   <span class="cm"># hooks + recall/ask/remember</span>
 open -a Hypermnesia</code></pre>
@@ -220,7 +265,7 @@ open -a Hypermnesia</code></pre>
 
   <!-- ============ FAQ ============ -->
   <section id="faq" class="section">
-    <p class="kicker reveal">06&nbsp;/&nbsp;FAQ</p>
+    <p class="kicker reveal">08&nbsp;/&nbsp;FAQ</p>
     <h2 class="reveal">Fair questions</h2>
 
     <details class="reveal">
@@ -249,6 +294,16 @@ open -a Hypermnesia</code></pre>
     </details>
   </section>
 
+  <!-- ============ CLOSER ============ -->
+  <section id="get" class="closer">
+    <h2 class="reveal">Every session you wait, your agent forgets the same things again.</h2>
+    <p class="closer-lede reveal">Install today and it captures this session’s decisions as they happen — and <code>backfill</code> seeds it from the sessions you’ve <em>already</em> run, so you start with memory, not an empty file.</p>
+    <p class="cta-row reveal">
+      <a class="btn btn-primary" href="https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip">⬇&nbsp;&nbsp;Download for macOS</a>
+    </p>
+    <p class="closer-trust reveal">free &amp; MIT-licensed&nbsp;·&nbsp;runs entirely on-device, no telemetry&nbsp;·&nbsp;<code>setup --uninstall</code> reverses everything</p>
+  </section>
+
 </main>
 
 <footer class="site-footer">
@@ -257,7 +312,7 @@ open -a Hypermnesia</code></pre>
     <a href="https://github.com/tweibley/hypermnesia">GitHub</a>
     <a href="https://github.com/tweibley/hypermnesia/blob/main/SECURITY.md">Security</a>
     <a href="https://github.com/tweibley/hypermnesia/blob/main/LICENSE">MIT License</a>
-    <a href="https://github.com/tweibley/hypermnesia/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/tweibley/hypermnesia/blob/main/CHANGELOG.md">Changelog&nbsp;·&nbsp;v0.1.1</a>
     <a href="https://x.com/themcgruff" rel="me">@themcgruff</a>
   </nav>
   <p class="foot-note">Built for Claude&nbsp;Code, Cursor&nbsp;&amp; Google&nbsp;Antigravity. Everything stays on your machine.</p>

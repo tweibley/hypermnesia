@@ -211,6 +211,78 @@ code {
 }
 .section-lede { color: var(--muted); max-width: 640px; margin: -12px 0 30px; }
 
+/* the problem: benchmark bars */
+.bench {
+  border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(19, 16, 34, 0.55);
+  padding: 24px 26px;
+  display: grid; gap: 18px;
+}
+.bench-row { display: grid; grid-template-columns: 250px 1fr 88px; gap: 18px; align-items: center; }
+.bench-label {
+  font-family: var(--mono); font-size: 12px; font-weight: 500;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);
+}
+.is-hot .bench-label { color: var(--accent-hot); }
+.bench-track {
+  display: block; height: 10px; border-radius: 999px;
+  background: rgba(168, 140, 250, 0.07);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.bench-bar {
+  display: block; height: 100%; width: 0; border-radius: inherit;
+  background: var(--dim);
+  transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1) 250ms;
+}
+.is-hot .bench-bar {
+  background: linear-gradient(90deg, #7440e0, #c084fc);
+  box-shadow: 0 0 14px rgba(160, 107, 255, 0.5);
+}
+.bench.in .bench-bar { width: var(--w); }
+.bench-num { font-family: var(--serif); font-size: 27px; line-height: 1; color: var(--muted); text-align: right; }
+.bench-num span { color: var(--dim); font-size: 0.62em; }
+.is-hot .bench-num { color: var(--ink); }
+
+/* the artifact: memory record card */
+.memcard {
+  max-width: 720px;
+  border: 1px solid var(--line-strong); border-radius: 12px;
+  background: linear-gradient(180deg, rgba(19, 16, 34, 0.85), rgba(10, 7, 20, 0.92));
+  padding: 20px 24px 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 40px rgba(140, 80, 255, 0.06);
+}
+.mem-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.mem-type {
+  font-family: var(--mono); font-size: 12.5px;
+  padding: 5px 13px 5px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--bg-deep);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.mem-type::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--dot); box-shadow: 0 0 8px var(--dot); }
+.mem-state {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 4px 11px; border-radius: 4px; border: 1px solid transparent;
+}
+.mem-belief { margin-left: auto; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em; color: var(--dim); }
+.mem-body { font-family: var(--serif); font-size: 23px; line-height: 1.35; }
+.mem-rules { margin-top: 16px; display: grid; gap: 9px; }
+.mem-rules div { display: grid; grid-template-columns: 160px 1fr; gap: 14px; font-size: 13.5px; }
+.mem-rules dt {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent-hot); padding-top: 2px;
+}
+.mem-rules .not dt { color: #e5c453; }
+.mem-rules dd { color: var(--muted); }
+.mem-meta {
+  margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line);
+  display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em; color: var(--dim);
+}
+.mem-meta code { font-size: 11px; }
+#memory .types { margin-top: 34px; }
+
 /* the loop */
 .loop { list-style: none; counter-reset: step; position: relative; }
 .loop li {
@@ -361,6 +433,26 @@ details[open] summary::after { transform: rotate(45deg); }
 summary:hover { color: var(--accent-hot); }
 details p { padding: 0 22px 20px; color: var(--muted); font-size: 15px; max-width: 780px; }
 
+/* ————————————————————————————————— closer */
+.closer {
+  max-width: 760px; margin: 0 auto;
+  padding: clamp(80px, 13vh, 150px) 24px 0;
+  text-align: center;
+}
+.closer h2 {
+  font-family: var(--serif); font-weight: 400;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.18; letter-spacing: -0.005em;
+}
+.closer-lede { margin: 18px auto 30px; color: var(--muted); max-width: 620px; }
+.closer .cta-row { margin-top: 0; }
+.closer-trust {
+  margin-top: 18px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em;
+  color: var(--dim);
+}
+.closer-trust code { font-size: 11.5px; }
+
 /* ————————————————————————————————— footer */
 .site-footer {
   margin-top: clamp(72px, 12vh, 130px);
@@ -385,12 +477,17 @@ details p { padding: 0 22px 20px; color: var(--muted); font-size: 15px; max-widt
   .reveal { opacity: 1; transform: none; transition: none; }
   .scanline { animation: none; opacity: 0; }
   .card, .card:hover { transform: none; transition: none; }
+  .bench-bar { width: var(--w); transition: none; }
 }
 
 /* ————————————————————————————————— responsive */
 @media (max-width: 860px) {
   .stats, .cards { grid-template-columns: 1fr; }
   .manifest li { grid-template-columns: 1fr; gap: 6px; }
+  .bench-row { grid-template-columns: 1fr 72px; }
+  .bench-label { grid-column: 1 / -1; }
+  .mem-rules div { grid-template-columns: 1fr; gap: 3px; }
+  .mcp-row code { display: inline-block; max-width: 100%; overflow-x: auto; white-space: nowrap; vertical-align: bottom; }
   .site-header nav a:not(.btn) { display: none; }
   .loop li { padding-left: 24px; }
   .loop li::before { position: static; display: block; margin-bottom: 4px; }
