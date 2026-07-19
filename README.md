@@ -74,16 +74,10 @@ memory. Cards carry corpus stats only — never memory content.</sub></p>
 
 **[Download for macOS](https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip)**
 (universal, signed & notarized) — unzip, drag to Applications, open; the app walks you through
-setup and ships its CLI inside the bundle. Or with Homebrew, which also puts `hypermnesia` on
-your `PATH`:
+setup and ships its CLI inside the bundle. Installs keep themselves current via the built-in
+auto-updater.
 
-```bash
-brew install --cask tweibley/tap/hypermnesia
-open -a Hypermnesia
-```
-
-Then jump to `hypermnesia setup` below. (Cask setup for maintainers:
-[`packaging/homebrew/`](packaging/homebrew/README.md).)
+Then jump to `hypermnesia setup` below.
 
 ## Build from source
 

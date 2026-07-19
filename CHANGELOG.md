@@ -5,6 +5,16 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Deprecated
+
+- **Homebrew cask**: the `tweibley/tap` cask no longer receives version bumps — the
+  [direct download](https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip)
+  (signed & notarized, with built-in Sparkle auto-update) is now the sole install channel.
+  Existing brew installs of 0.1.1 or later keep updating themselves in place via the in-app
+  updater, so no action is required. To stop Homebrew tracking the app entirely, run
+  `brew uninstall --cask tweibley/tap/hypermnesia` and reinstall from the direct download —
+  your memories, settings, and hooks are untouched (avoid `--zap`, which deletes local data).
+
 ## [0.1.1] — 2026-07-18
 
 ### Added

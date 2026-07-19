@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build a release Hypermnesia.app: universal (arm64+x86_64) optimized build, the bundled
 # `hypermnesia` CLI, hardened-runtime code signing, optional notarization, and a
-# Homebrew-cask-ready zip + sha256. See docs/PACKAGING.md.
+# distributable zip + sha256. See docs/PACKAGING.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -23,7 +23,7 @@ echo "▸ Assembling ${APP}…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BUILD_DIR/HypermnesiaApp" "$APP/Contents/MacOS/Hypermnesia"
-cp "$BUILD_DIR/hypermnesia"    "$APP/Contents/Resources/hypermnesia"   # bundled CLI — the cask symlinks this onto PATH
+cp "$BUILD_DIR/hypermnesia"    "$APP/Contents/Resources/hypermnesia"   # bundled CLI — hooks and `hypermnesia setup` resolve it here
 # Sparkle (auto-update) — linked via @rpath ../Frameworks; SPM stages it next to the binary.
 ditto "$BUILD_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 cp LICENSE THIRD-PARTY-LICENSES.md "$APP/Contents/Resources/"
@@ -104,11 +104,11 @@ if [[ "$TYPE" == Developer\ ID* && -n "${NOTARY_PROFILE:-}" ]]; then
   echo "  ✓ notarized + stapled — ready to distribute"
 else
   echo "  ℹ Skipped notarization (needs a Developer ID Application cert + NOTARY_PROFILE)."
-  echo "    An un-notarized zip still installs via cask, but Gatekeeper blocks first launch."
+  echo "    An un-notarized zip runs on this machine, but Gatekeeper blocks it on others."
   echo "    See docs/PACKAGING.md to set that up."
 fi
 
-# Package the (stapled) app into a versioned, cask-ready zip and print its checksum.
+# Package the (stapled) app into a versioned zip and print its checksum.
 mkdir -p "$DIST"
 ZIP="$DIST/Hypermnesia-$VERSION.zip"
 rm -f "$ZIP"
@@ -164,7 +164,5 @@ echo ""
 echo "  version:  $VERSION"
 echo "  sha256:   $SHA"
 echo ""
-echo "  Publish + wire up the cask:"
-echo "    gh release create v$VERSION \"$ZIP\" --title \"v$VERSION\" --notes-file CHANGELOG.md"
-echo "    # then set version \"$VERSION\" and sha256 \"$SHA\" in your tap's Casks/hypermnesia.rb"
-echo "    # (packaging/homebrew/hypermnesia.rb is the source-of-truth copy)"
+echo "  Publish:"
+echo "    gh release create v$VERSION \"$ZIP\" \"$DIST/Hypermnesia.zip\" \"$DIST/appcast.xml\" --title \"v$VERSION\" --notes-file CHANGELOG.md"

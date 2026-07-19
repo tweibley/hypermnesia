@@ -1,4 +1,4 @@
-# Cut a release + refresh the Homebrew cask on every `v*` tag.
+# Cut a release on every `v*` tag.
 #
 # One-time setup — add these repo secrets (Settings → Secrets and variables → Actions):
 #   MACOS_CERT_P12_BASE64     base64 of your "Developer ID Application" cert exported as .p12
@@ -7,8 +7,6 @@
 #   MACOS_NOTARY_KEY_BASE64   base64 of your App Store Connect API key (AuthKey_XXXX.p8)
 #   MACOS_NOTARY_KEY_ID       the key's Key ID
 #   MACOS_NOTARY_ISSUER_ID    the Issuer ID from App Store Connect → Integrations
-#   HOMEBREW_TAP_TOKEN        a PAT with `contents:write` on tweibley/homebrew-tap
-#                             (only needed for the auto-update-tap job)
 #   SPARKLE_ED_PRIVATE_KEY    the EdDSA private key for Sparkle update signing — export with
 #                             `generate_keys -x key.txt` (Sparkle's tool), `gh secret set
 #                             SPARKLE_ED_PRIVATE_KEY < key.txt`, then delete key.txt. The
@@ -27,9 +25,6 @@ permissions:
 jobs:
   build:
     runs-on: macos-latest
-    outputs:
-      version: ${{ steps.pkg.outputs.version }}
-      sha256: ${{ steps.pkg.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v7
 
@@ -104,9 +99,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           bash Scripts/release.sh
-          SHA="$(shasum -a 256 "dist/Hypermnesia-$VERSION.zip" | awk '{print $1}')"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -119,33 +112,3 @@ jobs:
             dist/Hypermnesia.zip
             dist/appcast.xml
           generate_release_notes: true
-
-  update-tap:
-    needs: build
-    runs-on: ubuntu-latest
-    # Runs only once you've created the tap repo + HOMEBREW_TAP_TOKEN and set the repo
-    # variable ENABLE_TAP_UPDATE=true (Settings → Secrets and variables → Actions → Variables).
-    # Until then the release still publishes; you bump the cask by hand the first time.
-    if: vars.ENABLE_TAP_UPDATE == 'true'
-    steps:
-      - name: Checkout tap
-        uses: actions/checkout@v7
-        with:
-          repository: tweibley/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-      - name: Bump cask version + sha256
-        env:
-          VERSION: ${{ needs.build.outputs.version }}
-          SHA256: ${{ needs.build.outputs.sha256 }}
-        run: |
-          CASK="Casks/hypermnesia.rb"
-          sed -i -E "s/^  version \".*\"/  version \"$VERSION\"/" "$CASK"
-          sed -i -E "s/^  sha256 \".*\"/  sha256 \"$SHA256\"/" "$CASK"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- "$CASK"; then
-            echo "No tap changes to commit."
-            exit 0
-          fi
-          git commit -am "hypermnesia $VERSION"
-          git push

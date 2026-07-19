@@ -5,7 +5,7 @@ Hypermnesia ships as a macOS `.app` plus the `hypermnesia` CLI. Two build script
 | Script | Use |
 |--------|-----|
 | `Scripts/make-app.sh [debug\|release]` | Fast dev bundle (ad-hoc signed). For your own machine. |
-| `Scripts/release.sh` | Universal build + bundled CLI + hardened-runtime signing + optional notarization → a cask-ready zip. |
+| `Scripts/release.sh` | Universal build + bundled CLI + hardened-runtime signing + optional notarization → a distributable zip. |
 
 ## Local use (any machine you control)
 
@@ -40,15 +40,14 @@ is different from the "Apple Development" cert used for local builds.
    NOTARY_PROFILE=hypermnesia-notary bash Scripts/release.sh
    ```
    The script zips the app, submits with `notarytool --wait`, and `stapler staple`s the ticket on
-   success. It then writes a versioned, cask-ready `dist/Hypermnesia-<version>.zip` and prints its
+   success. It then writes a versioned `dist/Hypermnesia-<version>.zip` and prints its
    `sha256`. The result is double-click-distributable.
 
 ## Auto-update (Sparkle)
 
-Direct-download installs keep themselves current via [Sparkle](https://sparkle-project.org): the app
+Installs keep themselves current via [Sparkle](https://sparkle-project.org): the app
 checks `https://github.com/tweibley/hypermnesia/releases/latest/download/appcast.xml` (a signed feed
 `release.sh` writes to `dist/appcast.xml` and the release workflow uploads as a release asset).
-Homebrew users can keep using `brew upgrade`; both channels serve the same zip.
 
 How the pieces fit:
 
@@ -65,15 +64,6 @@ How the pieces fit:
 - **Versioning** — `CFBundleVersion` is set to the marketing version, and the appcast's
   `sparkle:version` matches it, so Sparkle's standard comparator just compares release numbers.
 
-## Homebrew cask
-
-The friendliest install for end users is `brew install --cask tweibley/tap/hypermnesia`. A cask
-serves a **prebuilt, notarized** zip (the one `release.sh` produces) from a GitHub Release, and the
-bundled `hypermnesia` CLI is symlinked onto `PATH` automatically. Full setup — creating the tap,
-cutting releases, and the CI workflow that automates it — is in
-[`packaging/homebrew/README.md`](../packaging/homebrew/README.md); the cask itself is
-[`packaging/homebrew/hypermnesia.rb`](../packaging/homebrew/hypermnesia.rb).
-
 ## Notes
 
 - The app is **not sandboxed** (it reads `~/.claude`, runs `git`/`claude` subprocesses) — fine for
@@ -81,8 +71,9 @@ cutting releases, and the CI workflow that automates it — is in
 - Hardened runtime needs `com.apple.security.automation.apple-events` (see
   `packaging/Hypermnesia.entitlements`) so notch click-back can focus terminal/IDE tabs. Outbound
   HTTPS (Gemini) and spawning subprocesses are allowed by default.
-- The CLI (`hypermnesia`) is **bundled inside the app** at `Contents/Resources/hypermnesia`, so the
-  cask can symlink it onto `PATH` with one artifact. For a from-source (non-cask) install, symlink
-  `~/.local/bin/hypermnesia` to `.build/release/hypermnesia` instead.
-- `release.sh` builds a **universal** binary (arm64 + x86_64) by default so one cask covers both
+- The CLI (`hypermnesia`) is **bundled inside the app** at `Contents/Resources/hypermnesia`, so one
+  artifact ships both the app and the CLI (hooks and `hypermnesia setup` resolve it from the
+  bundle). For a from-source install, symlink `~/.local/bin/hypermnesia` to
+  `.build/release/hypermnesia` instead.
+- `release.sh` builds a **universal** binary (arm64 + x86_64) by default so one download covers both
   Apple Silicon and Intel. Set `UNIVERSAL=0` for a faster native-only local build.
