@@ -28,7 +28,7 @@ struct HypermnesiaCLI: AsyncParsableCommand {
         groupedSubcommands: [
             CommandGroup(name: "Memories", subcommands: [
                 List.self, Show.self, Delete.self, Export.self, ImportClaudeMd.self,
-                Ask.self, Recall.self, Audit.self,
+                Ask.self, Recall.self, Audit.self, Dream.self,
             ]),
             CommandGroup(name: "Capture", subcommands: [
                 Backfill.self, Drain.self, Hydrate.self, Capture.self, SessionEventHook.self, MCP.self,
@@ -249,6 +249,67 @@ struct Ask: AsyncParsableCommand {
                 print("  • [\(source.type.rawValue)] \(source.title)")
             }
         }
+    }
+}
+
+/// `hypermnesia dream [--project P] [--days N]` — run one project's Memory Dream right now.
+/// The manual override: no idle/power/cap gating, and tonight's journal slot is replaced.
+struct Dream: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Consolidate recent sessions and memory into tonight's dream (epiphanies, drafts, skill proposals)."
+    )
+
+    @Option(name: .long, help: "Repository path (defaults to the current directory).")
+    var project: String?
+
+    @Option(name: .long, help: "Override the lookback window in days.")
+    var days: Int?
+
+    func run() async throws {
+        setvbuf(stdout, nil, _IONBF, 0)
+        let cwd = (project as NSString?)?.expandingTildeInPath ?? FileManager.default.currentDirectoryPath
+        let projectId = ProjectIdentity.resolve(cwd: cwd)
+        let store = try MemoryStore()
+        var config = AppConfigStore.loadBestEffort()
+        if let days { config.dreamLookbackDays = max(1, days) }
+        FileHandle.standardError.write(Data("Dreaming with \(DreamCompleters.label(config))…\n".utf8))
+
+        let result = await DreamService.dreamProject(projectId: projectId, store: store, appConfig: config)
+        if let reason = result.skippedReason {
+            print("Skipped: \(reason)")
+            return
+        }
+        guard let entry = result.entry else {
+            print("Dream did not complete.")
+            throw ExitCode.failure
+        }
+
+        switch entry.outcome {
+        case .quiet:
+            print("Quiet night — nothing cleared the quality gate.")
+            if let note = entry.payload.note { print("  \(note)") }
+        case .dreamed:
+            if let narrative = entry.narrative { print(narrative + "\n") }
+            for epiphany in entry.payload.epiphanies {
+                print("• [\(epiphany.kind.rawValue)] \(epiphany.title) — \(epiphany.insight)")
+                for quote in epiphany.quotes.prefix(2) {
+                    print("    “\(quote.text)” (session \(quote.sessionId.prefix(8)))")
+                }
+            }
+            let drafts = entry.payload.proposedMemoryIds.count
+            if drafts > 0 {
+                print("\nProposed \(drafts) draft memor\(drafts == 1 ? "y" : "ies") — review them in the inbox.")
+            }
+            for skill in entry.payload.skillProposals {
+                print("Proposed skill: \(skill.slug)\(skill.updatesExisting ? " (update)" : "") — install it from the app's Dream Journal.")
+            }
+        }
+        for back in entry.payload.reportBacks { print("↩ \(back.detail)") }
+
+        let stats = entry.payload.stats
+        let cost = stats.estCostUSD.map { String(format: "~$%.3f", $0) } ?? "n/a"
+        print("\n\(stats.sessionsScanned) session\(stats.sessionsScanned == 1 ? "" : "s") · "
+            + "\(stats.memoriesConsidered) memories · \(stats.calls) call (\(stats.classifier), \(cost))")
     }
 }
 
