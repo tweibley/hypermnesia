@@ -5,6 +5,25 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Memory Dreams**: after your Mac wakes and goes idle, Hypermnesia consolidates recent
+  Claude Code, Cursor, and Antigravity sessions into an evidence-backed Dream Journal —
+  typed epiphanies that lead with their receipts (verbatim transcript quotes, cited
+  memories, side-by-side contradictions with one-tap supersede), draft memories through
+  the normal review inbox, and skill proposals with a full lifecycle: staged `SKILL.md`
+  preview/edit, install into detected skill layouts only (`.claude/skills`,
+  `.cursor/skills`, `~/.gemini/skills`), update-with-diff (never clobbers), one-tap
+  uninstall, and watermark-based usage report-backs ("used twice since Tuesday" — or
+  honestly, not at all). One morning digest across all projects, a quiet "Dreamed" notch
+  chip while unread, a skippable REM replay on the brain MRI in a night palette, and a
+  stats-only share card. Consent-shaped throughout: off by default with a cost estimate
+  shown, per-night call cap, idle/battery/return-to-keyboard guards, per-night calls and
+  estimated cost recorded in the journal — and no dream is better than a bad dream:
+  nights that don't clear the quality gate are logged as quiet, never padded. Manual
+  pass: `hypermnesia dream [--project P] [--days N]`; the first dream runs right after
+  "Process previous sessions", priced into its consent dialog.
+
 ## [0.1.1] — 2026-07-18
 
 ### Added
