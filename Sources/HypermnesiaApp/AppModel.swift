@@ -118,6 +118,19 @@ final class AppModel {
     var isAsking = false
     var answer: MemoryAnswer?
 
+    // MARK: - Memory Dreams state
+
+    /// The Dream Journal sheet (reached from the notch chip, the digest notification, the Feed,
+    /// and the toolbar moon).
+    var dreamJournalShown = false
+    /// Unread dreamed nights across all projects — drives the notch chip and the toolbar badge.
+    /// Written only by `refreshUnreadDreams()` (DreamCoordinator extension).
+    var unreadDreamCount = 0
+    /// Non-nil ⇒ the REM replay overlay is playing this entry (skippable).
+    var remEntry: DreamJournalEntry?
+    /// Re-entrancy guard for the nightly pass (the drain loop ticks every 20 s).
+    var dreamPassRunning = false
+
     init() { open() }
 
     private static func loadLastBrowseMode() -> BrowseMode {
@@ -173,6 +186,7 @@ final class AppModel {
         completedInitialLoad = true
         refreshTotalDraftCount()
         refreshQueueHealth()
+        refreshUnreadDreams()
         let remembered = UserDefaults.standard.string(forKey: Self.lastSelectedProjectKey)
         if let remembered, projects.contains(remembered), selectedProject != remembered {
             selectedProject = remembered
@@ -725,6 +739,10 @@ final class AppModel {
             while !Task.isCancelled {
                 await self?.drainOnce()
                 await self?.runMaintenanceIfDue()
+                // Idle-after-wake dreams ride the same tick: sleep pauses this loop, so the first
+                // iterations after wake are exactly when "due tonight + idle long enough" can fire —
+                // no separate wake observer needed.
+                await self?.runDreamsIfDue()
                 try? await Task.sleep(for: .seconds(20))
             }
         }
@@ -845,6 +863,9 @@ final class AppModel {
         guard let store, let proposal = backfillProposal else { return }
         backfillProposal = nil
         guard !isProcessing else { return }
+        // The first dream runs over the project the backfill enriched most — decided now, priced
+        // into the consent dialog the user just accepted ("+ 1 dream pass").
+        let firstDreamProject = willRunFirstDream ? Self.dominantProject(in: proposal) : nil
         let enqueued = BackfillProposalService.enqueue(proposal, store: store)
         guard enqueued > 0 else {
             processingStatus = "No new sessions found."
@@ -876,11 +897,22 @@ final class AppModel {
             } else {
                 self.processingStatus = report.added > 0 ? "Added \(report.added) memories." : "Done."
             }
-            // The payoff moment: a first-ever backfill ends on the MRI with the history visible.
+            // The payoff moment: a first-ever backfill ends on the MRI with the history visible…
             if wasEmpty, report.added > 0 {
                 self.browseMode = .mri
             }
+            // …and the corpus is at its richest, so the first-ever dream runs right now (one extra
+            // call, already shown in the consent dialog). A quiet first dream stays silent.
+            if report.added > 0, let firstDreamProject {
+                await self.runFirstDream(project: firstDreamProject)
+            }
         }
+    }
+
+    /// The project a backfill proposal touches most — where the first dream will look.
+    static func dominantProject(in proposal: BackfillProposal) -> String? {
+        let grouped = Dictionary(grouping: proposal.candidates) { ProjectIdentity.resolve(cwd: $0.cwd) }
+        return grouped.max { $0.value.count < $1.value.count }?.key
     }
 
     /// Reality-check the selected project's memories against its current code, flagging stale ones.

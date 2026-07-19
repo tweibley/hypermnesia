@@ -1176,6 +1176,7 @@ extension MemoryActivityEvent.EventType {
         case .applyOverride: .critical
         case .decayTransition: .caution
         case .supersede: .caution
+        case .dream: .accentColor
         }
     }
 
@@ -1189,6 +1190,7 @@ extension MemoryActivityEvent.EventType {
         case .revalidate: "Revalidate"
         case .decayTransition: "Decay transition"
         case .supersede: "Supersede"
+        case .dream: "Dream"
         }
     }
 }
