@@ -284,11 +284,29 @@ code {
 #memory .types { margin-top: 34px; }
 
 /* the loop */
-.loop { list-style: none; counter-reset: step; position: relative; }
+.loop { list-style: none; counter-reset: step; position: relative; padding-left: 64px; }
+.loop::before {
+  content: ''; position: absolute; left: 19px; top: 20px; bottom: 20px; width: 1px;
+  background: linear-gradient(180deg, transparent, var(--line-strong) 8%, var(--line-strong) 92%, transparent);
+}
+.loop::after {
+  content: ''; position: absolute; left: 17px; top: 20px; bottom: 20px; width: 5px;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, var(--accent-hot) 0 30%, rgba(192, 132, 252, 0)) no-repeat;
+  background-size: 5px 28px;
+  background-position: 0 0%;
+  animation: loop-pulse 6s linear infinite;
+  pointer-events: none;
+}
+@keyframes loop-pulse {
+  0% { background-position: 0 0%; opacity: 0; }
+  8% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { background-position: 0 100%; opacity: 0; }
+}
 .loop li {
   counter-increment: step;
   position: relative;
-  padding: 20px 24px 20px 84px;
+  padding: 20px 24px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(19, 16, 34, 0.55);
@@ -296,13 +314,18 @@ code {
 }
 .loop li::before {
   content: counter(step, decimal-leading-zero);
-  position: absolute; left: 24px; top: 22px;
-  font-family: var(--mono); font-size: 13px; color: var(--dim);
+  position: absolute; left: -64px; top: 18px;
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--accent-hot);
+  background: var(--bg-deep);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 0 14px rgba(140, 80, 255, 0.18);
 }
-.loop li::after {
-  content: ''; position: absolute; left: 56px; top: 18px; bottom: 18px;
-  width: 1px; background: var(--line);
-}
+.loop li.reveal:nth-child(2) { transition-delay: 80ms; }
+.loop li.reveal:nth-child(3) { transition-delay: 160ms; }
+.loop li.reveal:nth-child(4) { transition-delay: 240ms; }
+.loop li.reveal:nth-child(5) { transition-delay: 320ms; }
 .loop .step {
   display: block;
   font-family: var(--mono); font-weight: 500; font-size: 14px;
@@ -310,7 +333,20 @@ code {
   color: var(--accent-hot); margin-bottom: 6px;
 }
 .loop p { color: var(--muted); max-width: 700px; }
-.loop li:hover { border-color: var(--line-strong); }
+.loop li:hover { border-color: var(--line-strong); box-shadow: 0 0 24px rgba(140, 80, 255, 0.07); }
+.loop-return {
+  margin-top: 4px;
+  display: flex; align-items: center; gap: 24px;
+  font-family: var(--mono); font-size: 12.5px; color: var(--dim); letter-spacing: 0.04em;
+}
+.lr-glyph {
+  flex: none;
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--line-strong);
+  background: var(--bg-deep);
+  color: var(--accent); font-size: 16px;
+}
 
 .decay {
   display: flex; gap: 6px; margin-top: 14px; max-width: 480px;
@@ -478,6 +514,7 @@ details p { padding: 0 22px 20px; color: var(--muted); font-size: 15px; max-widt
   .scanline { animation: none; opacity: 0; }
   .card, .card:hover { transform: none; transition: none; }
   .bench-bar { width: var(--w); transition: none; }
+  .loop::after { animation: none; opacity: 0; }
 }
 
 /* ————————————————————————————————— responsive */
@@ -489,8 +526,14 @@ details p { padding: 0 22px 20px; color: var(--muted); font-size: 15px; max-widt
   .mem-rules div { grid-template-columns: 1fr; gap: 3px; }
   .mcp-row code { display: inline-block; max-width: 100%; overflow-x: auto; white-space: nowrap; vertical-align: bottom; }
   .site-header nav a:not(.btn) { display: none; }
-  .loop li { padding-left: 24px; }
-  .loop li::before { position: static; display: block; margin-bottom: 4px; }
-  .loop li::after { display: none; }
+  .loop { padding-left: 0; }
+  .loop::before, .loop::after { display: none; }
+  .loop li::before {
+    position: static; display: inline-flex;
+    width: 28px; height: 28px; margin-bottom: 8px;
+    font-size: 11px; box-shadow: none;
+  }
+  .loop-return { gap: 14px; }
+  .lr-glyph { width: 28px; height: 28px; font-size: 13px; }
   .hud-bottom { display: none; }
 }
