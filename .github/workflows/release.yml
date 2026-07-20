@@ -101,6 +101,23 @@ jobs:
           bash Scripts/release.sh
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          # Pull this version's CHANGELOG section (header line excluded) so the GitHub release body —
+          # and the Sparkle "release notes" link that points at releases/tag/v$VERSION — show the
+          # curated notes instead of an empty auto-generated body. generate_release_notes below then
+          # appends the "Full Changelog" compare link.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { f=1; next }
+            f && /^## \[/ { exit }
+            f { print }
+          ' CHANGELOG.md > dist/release-notes.md
+          if [ ! -s dist/release-notes.md ]; then
+            echo "See [CHANGELOG.md](https://github.com/tweibley/hypermnesia/blob/main/CHANGELOG.md)." > dist/release-notes.md
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -114,4 +131,7 @@ jobs:
           # Fail the release rather than publish silently missing a listed asset (e.g. a dropped
           # appcast.xml would 404 every installed user's Sparkle update check).
           fail_on_unmatched_files: true
+          # The release body is this version's curated CHANGELOG section (the Sparkle "release notes"
+          # link points here); generate_release_notes appends the auto "Full Changelog" compare link.
+          body_path: dist/release-notes.md
           generate_release_notes: true
