@@ -270,7 +270,7 @@ public enum SessionEventFeed {
         now: Date = Date()
     ) -> [Card] {
         var cards: [Card] = []
-        for event in latestPerSession(events) {
+        for event in latestPerSession(ProjectVisibility.visible(events, projectId: \.projectId)) {
             guard event.kind != .ended, event.kind != .working,
                   allowedKinds.contains(event.kind),
                   !dismissedEventIds.contains(event.id) else { continue }
@@ -292,7 +292,7 @@ public enum SessionEventFeed {
     /// Ordered longest-running first: heartbeats refresh `timestamp`, so sorting by turn start
     /// keeps rows from shuffling on every beat.
     public static func working(events: [SessionEvent], now: Date = Date()) -> [Card] {
-        latestPerSession(events)
+        latestPerSession(ProjectVisibility.visible(events, projectId: \.projectId))
             .filter { $0.kind == .working && now.timeIntervalSince($0.timestamp) < workingTTL }
             .sorted { ($0.startedAt ?? $0.timestamp) < ($1.startedAt ?? $1.timestamp) }
             .map(Card.init)

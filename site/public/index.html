@@ -122,6 +122,7 @@ posthog.init('phc_yEhc9D5ih2obNdsHMv6VZhkVJzVKRm9rjPY84HQTrwjA',{
   <nav aria-label="Site">
     <a href="#how">How it works</a>
     <a href="#dreams">Dreams</a>
+    <a href="#app">The app</a>
     <a href="#privacy">Privacy</a>
     <a href="#results">Results</a>
     <a href="#clients">Clients</a>
@@ -190,7 +191,7 @@ posthog.init('phc_yEhc9D5ih2obNdsHMv6VZhkVJzVKRm9rjPY84HQTrwjA',{
         <span class="bench-num">15<span>/24</span></span>
       </div>
     </div>
-    <p class="caveat reveal">Tasks where the required convention exists <em>only</em> in memory. Same model, same tasks — the only variable is memory. Receipts, caveats, and the case where memory <em>hurt</em>: <a href="#results">06&nbsp;/&nbsp;Evals</a>.</p>
+    <p class="caveat reveal">Tasks where the required convention exists <em>only</em> in memory. Same model, same tasks — the only variable is memory. Receipts, caveats, and the case where memory <em>hurt</em>: <a href="#results">07&nbsp;/&nbsp;Evals</a>.</p>
   </section>
 
   <!-- ============ THE ARTIFACT ============ -->
@@ -295,11 +296,62 @@ posthog.init('phc_yEhc9D5ih2obNdsHMv6VZhkVJzVKRm9rjPY84HQTrwjA',{
       </footer>
     </article>
     <p class="caveat reveal">A real entry from this repo’s own history — verbatim quote, honest cost line. Dreams are <strong>off by default</strong>; enabling shows the estimate first. One classifier call per project per night under a cap you set, only while the machine is idle on adequate power, and it stops the moment you’re back. Skippable 12-second REM replay included; contradictions render side-by-side with one-tap resolution.</p>
+
+    <figure class="shot reveal">
+      <img src="/media/app/app-dreams.webp" width="1600" height="1127" loading="lazy"
+           alt="The Dream Journal: a night's entry for tweibley/hypermnesia with a consolidation summary and two detected contradictions, each shown as the two conflicting memories side by side with Keep this buttons">
+      <figcaption>The journal itself, on this repository — contradictions render as the two conflicting memories side by side, each with its one-tap resolution. Screenshot, not a mockup.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ THE APP ============ -->
+  <section id="app" class="section">
+    <p class="kicker reveal">05&nbsp;/&nbsp;The app</p>
+    <h2 class="reveal">Watch it remember</h2>
+    <p class="section-lede reveal">Everything below is a screenshot of Hypermnesia holding <em>this repository’s own memory</em> — 215 typed memories captured from the sessions that built the app. Several were captured live by the session that took these screenshots.</p>
+
+    <div class="tour">
+      <figure class="tour-item reveal">
+        <h3>The workbench</h3>
+        <p>Seven types down the sidebar, freshness and belief on every row, provenance one click away. Risky captures wait in the review filter as drafts — 40 of them here — until you confirm; nothing hydrates a session without earning it.</p>
+        <img src="/media/app/app-list.webp" width="1600" height="1000" loading="lazy"
+             alt="Hypermnesia's List view: sidebar with seven memory types and counts, a review filter with 40 drafts, and memory rows each showing type, age, and a freshness state with belief percentage">
+      </figure>
+
+      <figure class="tour-item reveal">
+        <h3>The MRI, on live tissue</h3>
+        <p>The replay at the top of this page runs on sample data. This one isn’t — every circle is one of this repo’s memories, sized by confidence and colored by decay, and every pulse is a real inject, recall, or capture firing from a session. The HUD is reading <em>Capture&nbsp;4×&nbsp;·&nbsp;1&nbsp;minute&nbsp;ago</em> — the capture in question being this page’s own work session.</p>
+        <img src="/media/app/app-mri.webp" width="1600" height="1000" loading="lazy"
+             alt="The Brain MRI view live: memories arranged as a brain with fresh, aging, and stale circles, purple pulse lines firing from a central Claude node, session event lanes on the left, and a live timeline at the bottom">
+      </figure>
+
+      <figure class="tour-item reveal">
+        <h3>The constellation</h3>
+        <p>All 215 memories at once, linked by inferred edges — decisions to the conventions they produced, concerns to the code they guard. Three layouts; this is Constellation.</p>
+        <img src="/media/app/app-graph.webp" width="1600" height="1000" loading="lazy"
+             alt="The Graph view: hundreds of typed memory nodes — decisions, conventions, facts, concerns — connected by faint inferred edges, with a type legend and per-type counts in the sidebar">
+      </figure>
+
+      <div class="tour-grid">
+        <figure class="tour-item reveal">
+          <h3>The vitals</h3>
+          <p>Captured vs. confirmed per day, average injectable confidence, and the decay of each day’s cohort — the health of the memory itself, measured.</p>
+          <img src="/media/app/app-trends.webp" width="1600" height="1000" loading="lazy"
+               alt="The Trends view: stat tiles for confirmed share, below-injection-threshold share, and override ratio, above charts of memories captured per day and average injectable confidence">
+        </figure>
+        <figure class="tour-item reveal">
+          <h3>The plain-truth feed</h3>
+          <p>Exactly what happened, when: every injection, recall, and capture — with the memories involved and per-event latency in milliseconds.</p>
+          <img src="/media/app/app-feed.webp" width="1600" height="1000" loading="lazy"
+               alt="The Feed view: a chronological list of injection, capture, and recall events with the memory titles involved, relative timestamps, and millisecond latencies">
+        </figure>
+      </div>
+    </div>
   </section>
 
   <!-- ============ PRIVACY ============ -->
   <section id="privacy" class="section">
-    <p class="kicker reveal">05&nbsp;/&nbsp;Privacy</p>
+    <p class="kicker reveal">06&nbsp;/&nbsp;Privacy</p>
     <h2 class="reveal">Local-first, verifiably</h2>
     <ul class="manifest">
       <li class="reveal"><span class="m-key">store</span> <span class="m-val">one SQLite file — <code>~/Library/Application&nbsp;Support/Hypermnesia/memory.db</code></span></li>
@@ -311,7 +363,7 @@ posthog.init('phc_yEhc9D5ih2obNdsHMv6VZhkVJzVKRm9rjPY84HQTrwjA',{
 
   <!-- ============ RESULTS ============ -->
   <section id="results" class="section">
-    <p class="kicker reveal">06&nbsp;/&nbsp;Evals</p>
+    <p class="kicker reveal">07&nbsp;/&nbsp;Evals</p>
     <h2 class="reveal">Measured, honestly</h2>
     <div class="stats">
       <div class="stat reveal">
@@ -332,7 +384,7 @@ posthog.init('phc_yEhc9D5ih2obNdsHMv6VZhkVJzVKRm9rjPY84HQTrwjA',{
 
   <!-- ============ CLIENTS ============ -->
   <section id="clients" class="section">
-    <p class="kicker reveal">07&nbsp;/&nbsp;Setup</p>
+    <p class="kicker reveal">08&nbsp;/&nbsp;Setup</p>
     <h2 class="reveal">Three clients, one memory</h2>
     <p class="section-lede reveal">The same local store, captured from and injected into all three — with <code>recall</code>, <code>ask</code>, and <code>remember</code> available to each agent over MCP.</p>
     <div class="cards">
@@ -360,7 +412,7 @@ hypermnesia install-antigravity-hooks</code></pre>
 
   <!-- ============ QUICK START ============ -->
   <section id="start" class="section">
-    <p class="kicker reveal">08&nbsp;/&nbsp;Install</p>
+    <p class="kicker reveal">09&nbsp;/&nbsp;Install</p>
     <h2 class="reveal">Quick start</h2>
     <p class="reveal" style="margin:0 0 1rem">
       <a class="btn btn-primary" href="https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip">⬇&nbsp;&nbsp;Download for macOS</a>
@@ -379,7 +431,7 @@ open -a Hypermnesia</code></pre>
 
   <!-- ============ FAQ ============ -->
   <section id="faq" class="section">
-    <p class="kicker reveal">09&nbsp;/&nbsp;FAQ</p>
+    <p class="kicker reveal">10&nbsp;/&nbsp;FAQ</p>
     <h2 class="reveal">Fair questions</h2>
 
     <details class="reveal">
@@ -415,7 +467,7 @@ open -a Hypermnesia</code></pre>
 
   <!-- ============ INVENTORY ============ -->
   <section id="inventory" class="section">
-    <p class="kicker reveal">10&nbsp;/&nbsp;Inventory</p>
+    <p class="kicker reveal">11&nbsp;/&nbsp;Inventory</p>
     <h2 class="reveal">The complete list, for the thorough</h2>
     <p class="section-lede reveal">Everything above is the argument. This is the manifest — every shipped capability, one line each.</p>
     <div class="capgrid reveal">

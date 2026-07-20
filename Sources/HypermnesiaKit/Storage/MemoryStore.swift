@@ -175,11 +175,12 @@ public final class MemoryStore: Sendable {
 
     /// Distinct project ids that have at least one (non-deleted) memory.
     public func projects() throws -> [String] {
-        try dbQueue.read { db in
+        let all = try dbQueue.read { db in
             try String.fetchAll(db, sql: """
                 SELECT DISTINCT projectId FROM memory_node WHERE deletedAt IS NULL ORDER BY projectId
                 """)
         }
+        return ProjectVisibility.visible(all) { $0 }
     }
 
     /// Count of non-deleted memories per type for a project.

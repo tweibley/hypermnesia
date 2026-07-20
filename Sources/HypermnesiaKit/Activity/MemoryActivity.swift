@@ -131,8 +131,12 @@ public enum MemoryActivityLog {
         let fileSize = Int(signature.size)
 
         guard let projectId else {
-            return Array(decodedTail(url: url, signature: signature, windowBytes: maxReadBytes).suffix(limit))
+            let tail = ProjectVisibility.visible(
+                decodedTail(url: url, signature: signature, windowBytes: maxReadBytes),
+                projectId: \.projectId)
+            return Array(tail.suffix(limit))
         }
+        guard !ProjectVisibility.isHidden(projectId: projectId) else { return [] }
 
         var window = maxReadBytes
         var selected = projectMatches(

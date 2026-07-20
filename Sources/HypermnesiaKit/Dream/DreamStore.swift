@@ -35,11 +35,12 @@ extension MemoryStore {
 
     /// Newest first; `projectId: nil` spans all projects (digest + journal home).
     public func dreamEntries(projectId: String? = nil, limit: Int = 60) throws -> [DreamJournalEntry] {
-        try dbQueue.read { db in
+        let entries = try dbQueue.read { db in
             var request = DreamJournalEntry.order(Column("createdAt").desc).limit(limit)
             if let projectId { request = request.filter(Column("projectId") == projectId) }
             return try request.fetchAll(db)
         }
+        return ProjectVisibility.visible(entries, projectId: \.projectId)
     }
 
     /// The most recent night this project's dream loop RAN (dreamed or quiet) — the calendar-day
@@ -54,12 +55,13 @@ extension MemoryStore {
     }
 
     public func unreadDreamEntries() throws -> [DreamJournalEntry] {
-        try dbQueue.read { db in
+        let entries = try dbQueue.read { db in
             try DreamJournalEntry
                 .filter(Column("unread") == true)
                 .order(Column("createdAt").desc)
                 .fetchAll(db)
         }
+        return ProjectVisibility.visible(entries, projectId: \.projectId)
     }
 
     public func markDreamRead(id: String) throws {

@@ -18,6 +18,7 @@ struct RootView: View {
         .sheet(isPresented: $model.quickOpenShown) {
             QuickOpenView()
         }
+        .task { await ScreenshotHarness.runIfRequested(model: model) }
     }
 }
 

@@ -543,6 +543,23 @@ details p { padding: 0 22px 20px; color: var(--muted); font-size: 15px; max-widt
 .capgrid p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
 .capgrid code { font-size: 12px; }
 
+/* ————————————————————————————————— app screenshots (the tour) */
+.shot { margin: 34px 0 0; }
+.shot img, .tour-item img {
+  display: block; width: 100%; height: auto;
+  filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 44px rgba(140, 80, 255, 0.08));
+}
+.shot figcaption { margin-top: 14px; font-size: 13px; color: var(--dim); }
+.tour { display: flex; flex-direction: column; gap: clamp(48px, 7vh, 76px); margin-top: 44px; }
+.tour-item h3 {
+  font-family: var(--serif); font-weight: 400;
+  font-size: clamp(22px, 3vw, 28px); letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+.tour-item p { color: var(--muted); max-width: 680px; margin: 0 0 22px; }
+.tour-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px 28px; align-items: start; }
+.tour-grid .tour-item p { min-height: 5.2em; }
+
 /* ————————————————————————————————— reveal + motion */
 .reveal { opacity: 0; transform: translateY(14px); transition: opacity 600ms ease, transform 600ms ease; }
 .reveal.in { opacity: 1; transform: none; }
@@ -559,6 +576,8 @@ details p { padding: 0 22px 20px; color: var(--muted); font-size: 15px; max-widt
 /* ————————————————————————————————— responsive */
 @media (max-width: 860px) {
   .stats, .cards { grid-template-columns: 1fr; }
+  .tour-grid { grid-template-columns: 1fr; }
+  .tour-grid .tour-item p { min-height: 0; }
   .manifest li { grid-template-columns: 1fr; gap: 6px; }
   .bench-row { grid-template-columns: 1fr 72px; }
   .bench-label { grid-column: 1 / -1; }
