@@ -61,23 +61,32 @@ public enum ConflictEngine {
         let confirmed = ((try? store.allNodes(projectId: projectId, status: .confirmed)) ?? [])
             .filter { !$0.isSuperseded && !$0.isDeleted }
         let newestFirst = confirmed.sorted { $0.createdAt > $1.createdAt }
+        // Mutable working copies keyed by id: a memory can be BOTH a revision of an older one and,
+        // in a longer chain, the target superseded by a still-newer one. Every write must carry
+        // forward earlier iterations' mutations, so we always read from and write back to `working`
+        // rather than re-persisting the immutable `newestFirst` snapshot (which would clobber a
+        // `supersededById` already saved this pass).
+        var working = Dictionary(uniqueKeysWithValues: newestFirst.map { ($0.id, $0) })
         var retired = Set<String>()
         var applied = 0
-        for newer in newestFirst where newer.supersedesId == nil {
-            let olderPool = newestFirst.filter { $0.createdAt < newer.createdAt && !retired.contains($0.id) }
-            guard let older = conflict(of: newer, in: olderPool) else { continue }
-            var revising = newer
-            revising.supersedesId = older.id
-            var retiredNode = older
-            retiredNode.supersededById = newer.id
-            retiredNode.updatedAt = Date()
-            guard (try? store.upsert([revising, retiredNode])) != nil else { continue }
+        for snapshot in newestFirst {
+            guard var newer = working[snapshot.id], newer.supersedesId == nil else { continue }
+            let olderPool = newestFirst.compactMap { working[$0.id] }
+                .filter { $0.createdAt < newer.createdAt && !retired.contains($0.id) }
+            guard let match = conflict(of: newer, in: olderPool),
+                  var older = working[match.id] else { continue }
+            newer.supersedesId = older.id
+            older.supersededById = newer.id
+            older.updatedAt = Date()
+            guard (try? store.upsert([newer, older])) != nil else { continue }
+            working[newer.id] = newer
+            working[older.id] = older
             retired.insert(older.id)
             applied += 1
             MemoryActivityLog.append(.init(
                 projectId: projectId,
                 eventType: .supersede,
-                memoryIds: [retiredNode.id, revising.id],
+                memoryIds: [older.id, newer.id],
                 count: 1,
                 metadata: ["source": "sweep"]
             ))

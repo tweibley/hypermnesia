@@ -1380,8 +1380,18 @@ struct Doctor: AsyncParsableCommand {
         print("classifier (claude CLI): \(Self.commandExists("claude") ? "found ✓" : "MISSING ✗")")
 
         func mark(_ ok: Bool) -> String { ok ? "installed ✓" : "not installed" }
+        // Hooks can be "installed" (our name is in settings.json) yet dead — the recorded binary
+        // path no longer exists after the app is moved/translocated. Report that distinctly instead
+        // of a false "installed ✓".
+        func hookMark(projectPath: String? = nil) -> String {
+            guard HookInstaller.isInstalled(projectPath: projectPath) else { return "not installed" }
+            if let missing = HookInstaller.missingBinaryPaths(projectPath: projectPath).first {
+                return "installed but binary missing at \(missing) — re-run install-hooks ✗"
+            }
+            return "installed ✓"
+        }
         print("\nClaude Code (user-global):")
-        print("  capture hooks:   \(mark(HookInstaller.isInstalled()))")
+        print("  capture hooks:   \(hookMark())")
         print("  recall guide:    \(mark(MemoryGuideInstaller.isInstalled()))")
         print("  recall perms:    \(mark(PermissionInstaller.isInstalled()))")
 
@@ -1391,7 +1401,7 @@ struct Doctor: AsyncParsableCommand {
         let projectId = ProjectIdentity.resolve(cwd: cwd)
         print("\nThis project (\(cwd)):")
         print("  project id:      \(projectId)")
-        print("  capture hooks:   \(mark(HookInstaller.isInstalled(projectPath: cwd))) (project-local)")
+        print("  capture hooks:   \(hookMark(projectPath: cwd)) (project-local)")
         print("  recall guide:    \(mark(MemoryGuideInstaller.isInstalled(projectPath: cwd))) (project-local)")
         print("  recall perms:    \(mark(PermissionInstaller.isInstalled(projectPath: cwd))) (project-local)")
         if let store = try? MemoryStore() {

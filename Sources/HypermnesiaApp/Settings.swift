@@ -30,6 +30,9 @@ final class SettingsModel {
         }
     }
     var hooksInstalled: Bool
+    /// Hooks are recorded in settings.json but point at a binary that no longer exists (the app was
+    /// moved / run translocated after install) — capture + hydration are silently dead; offer repair.
+    var hooksBinaryMissing = false
     /// Hooks installed by an older version, missing the notch status events — offer re-install.
     var hooksNeedUpdate = false
     var recallGuideInstalled: Bool
@@ -49,7 +52,7 @@ final class SettingsModel {
         default: false
         }
     }
-    var coreSetupComplete: Bool { hooksInstalled }
+    var coreSetupComplete: Bool { hooksInstalled && !hooksBinaryMissing }
     var mcpEnhancementComplete: Bool {
         recallGuideInstalled && recallPermissionsInstalled && mcpServerRegistered
     }
@@ -75,6 +78,7 @@ final class SettingsModel {
             configPersistenceError = error.localizedDescription
         }
         hooksInstalled = HookInstaller.isInstalled()
+        hooksBinaryMissing = HookInstaller.hasMissingBinary()
         recallGuideInstalled = MemoryGuideInstaller.isInstalled()
         recallPermissionsInstalled = PermissionInstaller.isInstalled()
         cursorHooksInstalled = CursorHookInstaller.isInstalled()
@@ -137,6 +141,7 @@ final class SettingsModel {
         do {
             if install { try HookInstaller.install(binaryPath: cli) } else { try HookInstaller.uninstall() }
             hooksInstalled = HookInstaller.isInstalled()
+            hooksBinaryMissing = HookInstaller.hasMissingBinary()
             statusMessage = install ? "Hooks installed — new sessions will build memory." : "Hooks removed."
         } catch {
             statusMessage = error.localizedDescription
@@ -286,6 +291,7 @@ final class SettingsModel {
 
     func refreshSetupStatus() {
         hooksInstalled = HookInstaller.isInstalled()
+        hooksBinaryMissing = HookInstaller.hasMissingBinary()
         recallGuideInstalled = MemoryGuideInstaller.isInstalled()
         recallPermissionsInstalled = PermissionInstaller.isInstalled()
         cursorHooksInstalled = CursorHookInstaller.isInstalled()
@@ -500,11 +506,13 @@ private struct OnboardingSettings: View {
             VStack(alignment: .leading, spacing: 10) {
                 setupRow(
                     title: "Capture hooks",
-                    detail: model.hooksInstalled
-                        ? "Installed (SessionStart, UserPromptSubmit, Stop, SessionEnd, Notification)."
-                        : "Not installed — memory won't auto-capture from Claude sessions.",
-                    done: model.hooksInstalled,
-                    actionTitle: "Install",
+                    detail: model.hooksBinaryMissing
+                        ? "Installed but broken — the recorded CLI path is gone (the app was moved or run from a temporary location after install). Capture and hydration are silently off. Reinstall to re-point the hooks at this app."
+                        : (model.hooksInstalled
+                            ? "Installed (SessionStart, UserPromptSubmit, Stop, SessionEnd, Notification)."
+                            : "Not installed — memory won't auto-capture from Claude sessions."),
+                    done: model.hooksInstalled && !model.hooksBinaryMissing,
+                    actionTitle: model.hooksBinaryMissing ? "Reinstall" : "Install",
                     optional: false
                 ) { model.setHooks(true) }
 

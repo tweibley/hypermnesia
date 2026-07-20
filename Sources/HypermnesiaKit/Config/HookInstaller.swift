@@ -93,6 +93,72 @@ public enum HookInstaller {
         return entries
     }
 
+    /// The distinct binary paths our installed hook commands are recorded to invoke. `isInstalled`
+    /// only proves our name is mentioned in settings.json; this recovers the actual executable the
+    /// hooks will exec so callers can confirm it still exists (a moved / translocated app bakes in a
+    /// path that later vanishes, leaving hooks that fail silently on every session).
+    public static func installedBinaryPaths(projectPath: String? = nil) -> [String] {
+        guard let data = try? Data(contentsOf: settingsURL(projectPath: projectPath)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let hooks = json["hooks"] as? [String: Any] else { return [] }
+        var paths: [String] = []
+        for entries in hooks.values {
+            guard let array = entries as? [[String: Any]] else { continue }
+            for entry in array where entryHasMarker(entry) {
+                for hook in (entry["hooks"] as? [[String: Any]]) ?? [] {
+                    guard let command = hook["command"] as? String,
+                          command.contains(marker) || command.contains(legacyMarker),
+                          let path = recordedBinaryPath(inCommand: command),
+                          !paths.contains(path) else { continue }
+                    paths.append(path)
+                }
+            }
+        }
+        return paths
+    }
+
+    /// Recorded hook binaries that no longer exist / aren't executable — the hooks are present in
+    /// settings.json yet every session's hook exec fails silently. Empty when there's nothing to
+    /// repair (including when hooks aren't installed at all).
+    public static func missingBinaryPaths(projectPath: String? = nil) -> [String] {
+        installedBinaryPaths(projectPath: projectPath).filter {
+            !FileManager.default.isExecutableFile(atPath: $0)
+        }
+    }
+
+    /// True when hooks are recorded but at least one points at a binary that's gone — a broken
+    /// install that `isInstalled` reports as healthy. Surfaced as a repair prompt in Settings and a
+    /// distinct line in `hypermnesia doctor`.
+    public static func hasMissingBinary(projectPath: String? = nil) -> Bool {
+        !missingBinaryPaths(projectPath: projectPath).isEmpty
+    }
+
+    /// Pull the binary path back out of an installed hook command. Our commands are built as
+    /// `'<path>' <subcommand> …` with `ConfigFile.shellQuote`, so the path is the leading
+    /// single-quoted token (with any embedded `'` written as the `'\''` escape). Returns nil for a
+    /// command that isn't shaped like one of ours.
+    static func recordedBinaryPath(inCommand command: String) -> String? {
+        let trimmed = command.trimmingCharacters(in: .whitespaces)
+        guard trimmed.first == "'" else { return nil }
+        var result = ""
+        var index = trimmed.index(after: trimmed.startIndex)
+        while index < trimmed.endIndex {
+            if trimmed[index] == "'" {
+                // A lone `'` closes the token; the `'\''` escape reopens with a literal quote.
+                let rest = trimmed[index...]
+                if rest.hasPrefix("'\\''") {
+                    result.append("'")
+                    index = trimmed.index(index, offsetBy: 4)
+                    continue
+                }
+                return result
+            }
+            result.append(trimmed[index])
+            index = trimmed.index(after: index)
+        }
+        return nil
+    }
+
     private static func entryHasMarker(_ entry: [String: Any]) -> Bool {
         (entry["hooks"] as? [[String: Any]])?.contains { hook in
             guard let command = hook["command"] as? String else { return false }

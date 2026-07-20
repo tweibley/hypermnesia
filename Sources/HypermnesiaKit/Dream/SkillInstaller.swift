@@ -81,7 +81,9 @@ public enum SkillInventory {
 /// A skill Hypermnesia itself installed (from a dream proposal) — the manifest is what makes the
 /// lifecycle real: uninstallable in one tap, usage-scanned with a watermark, reported back on.
 public struct InstalledSkillRecord: Codable, Sendable, Hashable, Identifiable {
-    public var id: String { slug }
+    /// Composite identity: a project-scoped skill is unique per project, not globally by slug, so
+    /// the same slug can be installed into several projects (and into user scope) at once.
+    public var id: String { "\(slug)|\(scope)|\(projectId ?? "")" }
     public var slug: String
     public var title: String
     /// Semantic-ish version written to the VERSION file; updates bump the patch component.
@@ -153,6 +155,17 @@ public enum SkillInstaller {
 
     public static func manifestURL(in supportDirectory: URL = StoreLocation.supportDirectory) -> URL {
         supportDirectory.appendingPathComponent("dream-skills.json")
+    }
+
+    /// A manifest record identifies the SAME install only when slug AND scope match, and — for
+    /// project scope — the projectId too. Keying on slug alone treats a project-scoped skill as
+    /// globally unique, so a second project's install would clobber the first project's copy.
+    static func recordMatches(
+        _ record: InstalledSkillRecord, slug: String, scope: String, projectId: String?
+    ) -> Bool {
+        guard record.slug == slug else { return false }
+        if scope == "user" { return record.scope == "user" }
+        return record.scope == "project" && record.projectId == projectId
     }
 
     public static func loadManifest(from url: URL? = nil) -> SkillManifest {
@@ -243,8 +256,11 @@ public enum SkillInstaller {
         var manifest = loadManifest(from: explicitManifestURL)
         let primaryDir = targets.primary.appendingPathComponent(slug, isDirectory: true)
 
-        if let existing = manifest.skills.first(where: { $0.slug == slug }) {
-            // Already managed → this is an update (version bump), whatever the caller thought.
+        let managed = manifest.skills.first {
+            recordMatches($0, slug: slug, scope: scope, projectId: projectId)
+        }
+        if let existing = managed, FileManager.default.fileExists(atPath: existing.primaryPath) {
+            // Already managed FOR THIS scope/project → this is an update (version bump).
             return try update(
                 slug: slug, markdown: proposal.markdown, title: proposal.title,
                 manifestURL: explicitManifestURL, now: now, existing: existing, manifest: &manifest)
@@ -252,6 +268,9 @@ public enum SkillInstaller {
         if FileManager.default.fileExists(atPath: primaryDir.path) {
             throw SkillInstallError.existsUnmanaged(path: primaryDir.path)
         }
+        // A managed record whose directory has since vanished is stale — drop it and reinstall
+        // fresh, rather than silently writing nothing and reporting success.
+        manifest.skills.removeAll { recordMatches($0, slug: slug, scope: scope, projectId: projectId) }
 
         let version = "1.0.0"
         var written: [URL] = []
@@ -297,7 +316,9 @@ public enum SkillInstaller {
             throw SkillInstallError.invalidSlug(rawSlug)
         }
         var manifest = loadManifest(from: explicitManifestURL)
-        if let existing = manifest.skills.first(where: { $0.slug == slug }) {
+        if let existing = manifest.skills.first(where: {
+            recordMatches($0, slug: slug, scope: scope, projectId: projectId)
+        }) {
             return try update(
                 slug: slug, markdown: markdown, title: title,
                 manifestURL: explicitManifestURL, now: now, existing: existing, manifest: &manifest)
@@ -332,30 +353,44 @@ public enum SkillInstaller {
         record.version = bumpPatch(record.version)
         record.updatedAt = now
         record.title = title
+        var wroteAny = false
         for path in [record.primaryPath] + record.mirrorPaths {
             let dir = URL(fileURLWithPath: path, isDirectory: true)
             guard FileManager.default.fileExists(atPath: dir.path) else { continue }
             try Data(markdown.utf8).write(to: dir.appendingPathComponent("SKILL.md"))
             try Data((record.version + "\n").utf8).write(to: dir.appendingPathComponent("VERSION"))
+            wroteAny = true
         }
-        manifest.skills = manifest.skills.map { $0.slug == slug ? record : $0 }
+        // Every recorded directory is gone: writing nothing yet returning success would report a
+        // phantom install/update. Surface it instead of lying about the outcome.
+        guard wroteAny else { throw SkillInstallError.notInstalled(slug: slug) }
+        manifest.skills = manifest.skills.map { $0.id == record.id ? record : $0 }
         try saveManifest(manifest, to: explicitManifestURL)
         return record
     }
 
     /// One-tap uninstall: remove the skill directory (and every mirror) and drop the record.
+    /// Pass `scope`/`projectId` to target one project's copy — omitting them falls back to a
+    /// slug-only match, which is ambiguous once the same slug is installed in several projects.
     @discardableResult
     public static func uninstall(
-        slug: String, manifestURL explicitManifestURL: URL? = nil
+        slug: String, scope: String? = nil, projectId: String? = nil,
+        manifestURL explicitManifestURL: URL? = nil
     ) throws -> InstalledSkillRecord {
         var manifest = loadManifest(from: explicitManifestURL)
-        guard let record = manifest.skills.first(where: { $0.slug == slug }) else {
+        let match: (InstalledSkillRecord) -> Bool
+        if let scope {
+            match = { recordMatches($0, slug: slug, scope: scope, projectId: projectId) }
+        } else {
+            match = { $0.slug == slug }
+        }
+        guard let record = manifest.skills.first(where: match) else {
             throw SkillInstallError.notInstalled(slug: slug)
         }
         for path in [record.primaryPath] + record.mirrorPaths {
             try? FileManager.default.removeItem(atPath: path)
         }
-        manifest.skills.removeAll { $0.slug == slug }
+        manifest.skills.removeAll { $0.id == record.id }
         try saveManifest(manifest, to: explicitManifestURL)
         return record
     }
@@ -413,7 +448,7 @@ public enum SkillInstaller {
         _ record: InstalledSkillRecord, manifestURL explicitManifestURL: URL? = nil
     ) throws {
         var manifest = loadManifest(from: explicitManifestURL)
-        manifest.skills = manifest.skills.map { $0.slug == record.slug ? record : $0 }
+        manifest.skills = manifest.skills.map { $0.id == record.id ? record : $0 }
         try saveManifest(manifest, to: explicitManifestURL)
     }
 

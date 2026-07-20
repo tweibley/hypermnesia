@@ -21,6 +21,11 @@ struct DreamJournalView: View {
         let entryId: String
         let proposal: DreamSkillProposal
         let currentMarkdown: String
+        /// The scope that produced this update — carried from the install/update call site so the
+        /// diff shown and the file rewritten are always the same on disk (never re-derived from config).
+        let scope: String
+        /// Absolute path of the skill directory about to be rewritten, shown in the diff header.
+        let resolvedPath: String?
         var diff: (added: Int, removed: Int) {
             SkillInstaller.diffSummary(old: currentMarkdown, new: proposal.markdown)
         }
@@ -410,7 +415,10 @@ struct DreamJournalView: View {
             }
             .controlSize(.small)
             if proposal.updatesExisting {
-                Button("Update…") { beginUpdate(proposal, entry: entry) }
+                Button("Update…") {
+                    beginUpdate(proposal, entry: entry,
+                                scope: AppConfigStore.loadBestEffort().dreamSkillTarget)
+                }
                     .controlSize(.small).buttonStyle(.borderedProminent)
             } else {
                 Menu("Install") {
@@ -476,6 +484,13 @@ struct DreamJournalView: View {
             Text("This rewrites the existing skill: +\(diff.added) line\(diff.added == 1 ? "" : "s"), "
                  + "−\(diff.removed) line\(diff.removed == 1 ? "" : "s"). Nothing is written until you confirm.")
                 .font(.callout).foregroundStyle(.secondary)
+            if let path = update.resolvedPath {
+                Text(path)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.tertiary)
+                    .textSelection(.enabled)
+                    .lineLimit(1).truncationMode(.middle)
+            }
             HStack(alignment: .top, spacing: 10) {
                 markdownPane(title: "Current", text: update.currentMarkdown)
                 markdownPane(title: "Proposed", text: update.proposal.markdown)
@@ -557,30 +572,38 @@ struct DreamJournalView: View {
                 + (record.mirrorPaths.isEmpty ? "." : " (+\(record.mirrorPaths.count) mirror\(record.mirrorPaths.count == 1 ? "" : "s")).")
         } catch SkillInstallError.existsUnmanaged {
             // A skill Hypermnesia didn't install already sits there → explicit diff-confirm flow.
-            beginUpdate(proposal, entry: entry)
+            // Carry the SAME scope that blocked the install, so the diff shown and the file
+            // rewritten are the foreign skill the user actually chose — never a config default.
+            beginUpdate(proposal, entry: entry, scope: scope)
         } catch {
             statusLine = "Install failed: \(error.localizedDescription)"
         }
     }
 
-    private func beginUpdate(_ proposal: DreamSkillProposal, entry: DreamJournalEntry) {
-        let scope = AppConfigStore.loadBestEffort().dreamSkillTarget
-        let current = SkillInstaller.loadManifest().skills
-            .first { $0.slug == proposal.slug }
+    private func beginUpdate(_ proposal: DreamSkillProposal, entry: DreamJournalEntry, scope: String) {
+        let path = projectPath(for: entry)
+        let managed = SkillInstaller.loadManifest().skills.first { $0.slug == proposal.slug }
+        // The diff must read the SAME file the update will write. For a Hypermnesia-managed skill
+        // that's the manifest's recorded primary path; for a foreign skill it's the primary dir of
+        // the caller's scope — never a config default.
+        let resolvedPath: String? = managed.map(\.primaryPath)
+            ?? SkillInstaller.targets(scope: scope, projectPath: path)?
+                .primary.appendingPathComponent(proposal.slug, isDirectory: true).path
+        let current = managed
             .flatMap(SkillInstaller.currentMarkdown)
-            ?? SkillInstaller.unmanagedMarkdown(
-                slug: proposal.slug, scope: scope, projectPath: projectPath(for: entry))
+            ?? SkillInstaller.unmanagedMarkdown(slug: proposal.slug, scope: scope, projectPath: path)
             ?? ""
-        pendingUpdate = PendingUpdate(entryId: entry.id, proposal: proposal, currentMarkdown: current)
+        pendingUpdate = PendingUpdate(
+            entryId: entry.id, proposal: proposal, currentMarkdown: current,
+            scope: scope, resolvedPath: resolvedPath)
     }
 
     private func confirmUpdate(_ update: PendingUpdate) {
         guard let entry = entries.first(where: { $0.id == update.entryId }) else { return }
-        let scope = AppConfigStore.loadBestEffort().dreamSkillTarget
         do {
             let record = try SkillInstaller.update(
                 slug: update.proposal.slug, markdown: update.proposal.markdown,
-                title: update.proposal.title, scope: scope,
+                title: update.proposal.title, scope: update.scope,
                 projectPath: projectPath(for: entry), projectId: entry.projectId,
                 entryId: entry.id)
             setSkillState(update.proposal, entry: entry, state: .installed)
