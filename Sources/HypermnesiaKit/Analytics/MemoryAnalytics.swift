@@ -47,7 +47,7 @@ public enum MemoryAnalytics {
             timesApplied: node.timesApplied,
             timesAppliedSuccess: node.timesAppliedSuccess,
             timesOverridden: node.timesOverridden,
-            overrideRate: Double(node.timesOverridden) / Double(max(node.timesApplied, 1)),
+            overrideRate: Double(node.timesOverridden) / Double(max(node.timesAppliedSuccess + node.timesOverridden, 1)),
             timesSighted: node.timesSighted,
             lastAuditOutcome: node.lastAuditOutcome)
     }
@@ -77,15 +77,17 @@ public enum MemoryAnalytics {
                                 detail: node.status == .confirmed ? "Edited or confirmed" : "Edited"))
         }
 
-        let applied = node.timesApplied + node.timesAppliedSuccess
-        if applied > 0 {
+        // Reinforcement reflects real application outcomes (timesAppliedSuccess), not the legacy
+        // re-capture sighting counter (timesApplied) — using the latter mislabels "Applied 0×" on a
+        // memory that was only ever sighted, never applied in code.
+        if node.timesAppliedSuccess > 0 {
             let success = node.timesAppliedSuccess
             events.append(.init(timestamp: node.updatedAt, kind: .reinforced,
                                 title: "Reinforced",
-                                detail: "Applied \(node.timesApplied)×" + (success > 0 ? ", \(success) survived in code" : "")))
+                                detail: "Applied \(success)× in code"))
         }
         if node.timesOverridden > 0 {
-            let pct = Int((Double(node.timesOverridden) / Double(max(node.timesApplied, 1))) * 100)
+            let pct = Int((Double(node.timesOverridden) / Double(max(node.timesAppliedSuccess + node.timesOverridden, 1))) * 100)
             events.append(.init(timestamp: node.updatedAt, kind: .overridden,
                                 title: "Overridden",
                                 detail: "Reverted/contradicted \(node.timesOverridden)× (\(pct)%)"))
@@ -125,7 +127,7 @@ public enum MemoryAnalytics {
     /// real corroboration, otherwise **stable**.
     private static func trend(for node: MemoryNode, now: Date) -> ConfidenceTrend {
         if node.isSuperseded { return .down }
-        let overrideRate = Double(node.timesOverridden) / Double(max(node.timesApplied, 1))
+        let overrideRate = Double(node.timesOverridden) / Double(max(node.timesAppliedSuccess + node.timesOverridden, 1))
         let ageDays = node.daysSinceValidation(asOf: now)
         if node.type.decaysWithTime && (ageDays >= DecayEngine.freshDays || overrideRate > DecayEngine.overrideRateThreshold) {
             return .down
@@ -209,13 +211,15 @@ public enum MemoryAnalytics {
         let below = pool.filter { $0.confidence < threshold }.count
         let belowRate = pool.isEmpty ? 0 : Double(below) / Double(pool.count)
 
-        let totalApplied = nodes.reduce(0) { $0 + $1.timesApplied }
+        let totalAppliedSuccess = nodes.reduce(0) { $0 + $1.timesAppliedSuccess }
         let totalOverridden = nodes.reduce(0) { $0 + $1.timesOverridden }
 
         return ProjectTrendKPI(
             confirmedRate: Double(confirmed.count) / Double(total),
             belowInjectionThresholdRate: belowRate,
-            aggregateOverrideRate: Double(totalOverridden) / Double(max(totalApplied, 1)))
+            // Override RATE divides by application outcomes (successes + overrides), matching
+            // BeliefEngine.applicationFactor — never by the legacy sighting counter (timesApplied).
+            aggregateOverrideRate: Double(totalOverridden) / Double(max(totalAppliedSuccess + totalOverridden, 1)))
     }
 
     private static func displayClamp(_ x: Double) -> Double { min(1.0, max(0.0, x)) }
@@ -240,7 +244,7 @@ public struct ConfidenceBreakdownVM: Identifiable, Sendable, Equatable {
     public let timesApplied: Int
     public let timesAppliedSuccess: Int
     public let timesOverridden: Int
-    public let overrideRate: Double        // timesOverridden / max(timesApplied, 1)
+    public let overrideRate: Double        // timesOverridden / max(timesAppliedSuccess + timesOverridden, 1)
     public let timesSighted: Int
     public let lastAuditOutcome: String?   // "consistent" / "drift" from the last reality check
 }

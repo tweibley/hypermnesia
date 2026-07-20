@@ -101,6 +101,20 @@ public enum DreamService {
         manifestURL: URL? = nil,
         now: Date = Date()
     ) async -> DreamRunner.RunResult {
+        // Advisory cross-process lock (mirrors `drain.lock`): the app's nightly pass, the "Dream
+        // now" button, and the `hypermnesia dream` CLI must never dream the same night concurrently
+        // — two runs both write tonight's `(projectId, night)` entry and `upsertDreamEntry` deletes
+        // the other, destroying one dream's journal narrative while its drafts survive orphaned.
+        try? FileManager.default.createDirectory(
+            at: StoreLocation.supportDirectory, withIntermediateDirectories: true)
+        let lockPath = StoreLocation.supportDirectory.appendingPathComponent("dream.lock").path
+        let fd = open(lockPath, O_CREAT | O_RDWR, 0o644)
+        guard fd >= 0, flock(fd, LOCK_EX | LOCK_NB) == 0 else {
+            if fd >= 0 { close(fd) }
+            return .skipped("another dream is already running")
+        }
+        defer { flock(fd, LOCK_UN); close(fd) }
+
         let config = runConfig(appConfig)
         let lookbackCutoff = now.addingTimeInterval(-Double(config.lookbackDays) * 86_400)
 
@@ -113,21 +127,29 @@ public enum DreamService {
             .min()
         let since = min(lookbackCutoff, oldestWatermark ?? lookbackCutoff)
 
-        let refs = DreamSessions.refs(forProject: projectId, since: since, now: now)
+        // Discover once across all clients/projects; the dream prompt reads only THIS project's
+        // sessions, but a user-scope skill's usage must be scanned across every project.
+        let allRefs = DreamSessions.discover(since: since, now: now)
+        let refs = allRefs.filter { $0.projectId == projectId }
         let windowRefs = refs.filter { $0.modifiedAt >= lookbackCutoff }
         let sessions = windowRefs
             .prefix(maxSessionsPerDream)
             .compactMap { DreamSessions.condense($0) }
 
-        let skillBacks = scanSkillUsage(
+        // Project-scope skills scan this project's transcripts; user-scope skills scan ALL projects'
+        // (they are used everywhere). Advanced watermarks are NOT persisted here — only after the run
+        // produces a journal entry carrying these report-backs, so a pre-gate-skipped night can't
+        // consume the scan window and silently swallow the usage it found.
+        let (skillBacks, scannedRecords) = scanSkillUsage(
             records: relevantSkills,
-            transcripts: refs.map { ($0.sessionId, $0.url, $0.modifiedAt) },
-            manifestURL: manifestURL, now: now)
+            projectTranscripts: refs.map { ($0.sessionId, $0.url, $0.modifiedAt) },
+            userTranscripts: allRefs.map { ($0.sessionId, $0.url, $0.modifiedAt) },
+            now: now)
 
         let projectPath = MemoryAuditor.repoPath(forProjectId: projectId)
         let inventory = SkillInventory.scan(projectPath: projectPath)
 
-        return await DreamRunner.run(
+        let result = await DreamRunner.run(
             projectId: projectId,
             store: store,
             completer: completer ?? DreamCompleters.makeFromConfig(appConfig),
@@ -136,21 +158,37 @@ public enum DreamService {
             skillReportBacks: skillBacks,
             config: config,
             now: now)
+
+        // Persist the advanced usage watermarks only when the run actually recorded an entry that
+        // carries `skillBacks`; a skipped/failed-to-persist run leaves the watermark untouched so
+        // the usage isn't lost to a window nobody reported on.
+        if result.entry != nil {
+            for record in scannedRecords {
+                try? SkillInstaller.recordUsage(record, manifestURL: manifestURL)
+            }
+        }
+        return result
     }
 
     /// Watermark-scan every installed dream skill and turn results into plain-spoken report-backs
-    /// (positive AND negative — the system says whether its suggestions worked).
+    /// (positive AND negative — the system says whether its suggestions worked). Does NOT persist
+    /// the advanced watermarks — the returned records are persisted by the caller only once a run
+    /// has recorded them. User-scope skills scan across ALL projects' transcripts; project-scope
+    /// skills scan only their own project's — so a user-scope skill used in another project is not
+    /// wrongly reported as unused, and no project consumes the scan window on another's behalf.
     static func scanSkillUsage(
         records: [InstalledSkillRecord],
-        transcripts: [(sessionId: String, url: URL, modifiedAt: Date)],
-        manifestURL: URL?,
+        projectTranscripts: [(sessionId: String, url: URL, modifiedAt: Date)],
+        userTranscripts: [(sessionId: String, url: URL, modifiedAt: Date)],
         now: Date
-    ) -> [DreamReportBack] {
+    ) -> (backs: [DreamReportBack], updated: [InstalledSkillRecord]) {
         var backs: [DreamReportBack] = []
+        var updatedRecords: [InstalledSkillRecord] = []
         for record in records {
+            let transcripts = record.scope == "user" ? userTranscripts : projectTranscripts
             let (updated, newSessions) = SkillInstaller.scanUsage(
                 record: record, transcripts: transcripts, now: now)
-            try? SkillInstaller.recordUsage(updated, manifestURL: manifestURL)
+            updatedRecords.append(updated)
             let daysSinceInstall = Int(now.timeIntervalSince(record.installedAt) / 86_400)
             if newSessions > 0 {
                 backs.append(DreamReportBack(
@@ -164,6 +202,6 @@ public enum DreamService {
                         + "\(daysSinceInstall) days ago — consider uninstalling it."))
             }
         }
-        return backs
+        return (backs, updatedRecords)
     }
 }

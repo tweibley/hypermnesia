@@ -28,6 +28,10 @@ public enum SessionIngestor {
 
     /// Ingest a whole session (used by backfill). Returns the number of memories created.
     /// On a classifier error the session is *not* marked processed, so a re-run retries it.
+    ///
+    /// Thin wrapper over `ingestSession` that flattens the outcome to a count for legacy callers.
+    /// A `.failed` outcome collapses to `0` here, which cannot be told apart from a genuinely
+    /// memory-less session — new callers should prefer `ingestSession` and report `.failed`.
     @discardableResult
     public static func ingest(
         transcript: URL,
@@ -39,7 +43,31 @@ public enum SessionIngestor {
         status: MemoryStatus = .draft,
         commitSha: String? = nil
     ) async -> Int {
-        guard !((try? store.isProcessed(sessionId: sessionId)) ?? false) else { return 0 }
+        switch await ingestSession(
+            transcript: transcript, sessionId: sessionId, projectId: projectId,
+            classifier: classifier, store: store, source: source, status: status, commitSha: commitSha
+        ) {
+        case .captured(let count): return count
+        case .waiting: return 0
+        case .failed: return 0
+        }
+    }
+
+    /// Ingest a whole session (used by backfill), returning a rich `Outcome` so callers can tell a
+    /// genuinely memory-less session (`.captured(0)`) apart from a classifier / persistence / read
+    /// failure (`.failed`) — mirroring `ingestIncremental`. Only *genuinely* undecodable input is
+    /// sealed; transient (file-level) read errors stay retryable.
+    public static func ingestSession(
+        transcript: URL,
+        sessionId: String,
+        projectId: String,
+        classifier: Classifier,
+        store: MemoryStore,
+        source: CaptureSource,
+        status: MemoryStatus = .draft,
+        commitSha: String? = nil
+    ) async -> Outcome {
+        guard !((try? store.isProcessed(sessionId: sessionId)) ?? false) else { return .captured(0) }
 
         // Respect a live-capture cursor: if hooks already classified events 0..cursor, only classify
         // the remaining slice so backfill doesn't re-extract (and re-dedup / spuriously re-confirm)
@@ -48,20 +76,29 @@ public enum SessionIngestor {
         let parsedEvents: [TranscriptEvent]
         do {
             parsedEvents = try TranscriptParser.parse(fileAt: transcript)
-        } catch {
-            // Truly undecodable/unrecognized input will never grow memories — seal it so consented
-            // backfill does not re-propose the same session forever.
+        } catch is TranscriptParseError {
+            // Genuinely undecodable/unrecognized input (`.corrupt` / `.unrecognized`) will never grow
+            // memories — seal it so consented backfill does not re-propose the same session forever.
             try? store.markProcessed(.init(
                 sessionId: sessionId, projectId: projectId, source: source, memoryCount: 0
             ))
-            return 0
+            return .captured(0)
+        } catch {
+            // A file-level error (missing / permission / IO / non-UTF8) is transient or externally
+            // fixable — do NOT seal, or a re-run would never retry the session. Mirror
+            // `ingestIncremental`: only a missing *managed* snapshot is terminal.
+            if !FileManager.default.fileExists(atPath: transcript.path) {
+                let terminal = TranscriptSnapshotStore.isManaged(transcript.path)
+                return .failed(reason: "transcript missing", terminal: terminal)
+            }
+            return .failed(reason: "transcript unreadable", terminal: false)
         }
         let convo: Conversation?
         if cursor > 0 {
             guard parsedEvents.count > cursor else {
                 // Already fully captured live — just seal it, don't reclassify anything.
                 try? store.markProcessed(.init(sessionId: sessionId, projectId: projectId, source: source, memoryCount: 0))
-                return 0
+                return .captured(0)
             }
             convo = ConversationBuilder.build(from: Array(parsedEvents[cursor...]), sessionId: sessionId)
         } else {
@@ -69,7 +106,7 @@ public enum SessionIngestor {
         }
         guard let convo, !convo.isEmpty else {
             try? store.markProcessed(.init(sessionId: sessionId, projectId: projectId, source: source, memoryCount: 0))
-            return 0
+            return .captured(0)
         }
 
         let recent = ((try? store.nodes(projectId: projectId, limit: 40)) ?? [])
@@ -79,7 +116,9 @@ public enum SessionIngestor {
         do {
             rawMemories = try await classifier.classify(convo, recentMemories: recent)
         } catch {
-            return 0   // don't seal a session that failed to classify — re-running backfill retries it
+            // Don't seal a session that failed to classify — a re-run retries it. Surface the failure
+            // so backfill can report it instead of an indistinguishable "0 memories".
+            return .failed(reason: "classification failed", terminal: false)
         }
 
         // ── Validation gate: filter degenerate captures, cap confidence on weak ones ──────────
@@ -119,7 +158,8 @@ public enum SessionIngestor {
             // classified memories forever.
             try store.upsert(fresh)
         } catch {
-            return 0
+            // Report the failure (the LLM call was already paid for) so it isn't dropped silently.
+            return .failed(reason: "persist failed", terminal: false)
         }
         // Advance the cursor to the full transcript so a later live/incremental drain sees nothing new.
         try? store.setCursor(sessionId: sessionId, projectId: projectId, count: parsedEvents.count)
@@ -134,7 +174,7 @@ public enum SessionIngestor {
                 metadata: ["source": source.rawValue]
             ))
         }
-        return fresh.count
+        return .captured(fresh.count)
     }
 
     /// Incrementally ingest a *live* session: classify only the transcript events past the cursor,
@@ -442,7 +482,12 @@ public enum SessionIngestor {
     ) -> [MemoryNode] {
         var pools: [MemoryType: [MemoryNode]] = [:]
         for type in Set(nodes.map(\.type)) {
-            pools[type] = (try? store.allNodes(projectId: projectId, type: type)) ?? []
+            // Exclude superseded (obsolete) nodes from the dedup/conflict pool. A superseded memory
+            // is never surfaced by hydration, so absorbing a fresh sighting into it silently loses the
+            // re-observed knowledge. Letting the candidate fall through lets ConflictEngine link it as
+            // a revision of the *superseding* node — the correct home for a re-established rule.
+            pools[type] = ((try? store.allNodes(projectId: projectId, type: type)) ?? [])
+                .filter { !$0.isSuperseded }
         }
         var fresh: [MemoryNode] = []
         for node in nodes {

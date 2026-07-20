@@ -113,17 +113,52 @@ public enum ClaudeCodeSessions {
     }
 
     /// The working directory a transcript ran in (read from its first line carrying a `cwd`).
+    ///
+    /// Reads incrementally rather than a single fixed prefix. A session whose early lines contain a
+    /// huge pasted attachment (base64 image, large file/tool payload) must not push the first
+    /// cwd-bearing line out of a small fixed window and become permanently unattributable — which
+    /// silently excludes it from `backfill --all` and from `transcripts(forRepoPath:)`. Oversized
+    /// lines can't be a compact `{…"cwd":…}` header, so they're skipped without a parse attempt.
     public static func firstCwd(of url: URL) -> String? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
-        let data = (try? handle.read(upToCount: 200_000)) ?? Data()
-        for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
-            if let lineData = line.data(using: .utf8),
-               let object = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-               let cwd = object["cwd"] as? String {
-                return cwd
+
+        let chunkSize = 64 * 1024
+        let maxScan = 16 * 1024 * 1024        // overall ceiling so a cwd-less transcript isn't read whole
+        let maxLineBytes = 512 * 1024         // a cwd header line is tiny; skip anything larger unparsed
+
+        func cwd(inLine line: Data) -> String? {
+            guard !line.isEmpty, line.count <= maxLineBytes,
+                  let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                  let value = object["cwd"] as? String else { return nil }
+            return value
+        }
+
+        var buffer = Data()
+        var scanned = 0
+        var skippingOversized = false        // discarding the tail of a too-large line until its newline
+        while scanned < maxScan, let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty {
+            scanned += chunk.count
+            buffer.append(chunk)
+            // Split off only *complete* lines; keep the trailing partial for the next chunk.
+            while let nl = buffer.firstIndex(of: 0x0A) {
+                let line = buffer.subdata(in: buffer.startIndex..<nl)
+                buffer.removeSubrange(buffer.startIndex...nl)
+                if skippingOversized {
+                    skippingOversized = false   // this newline ends the oversized line we skipped
+                    continue
+                }
+                if let value = cwd(inLine: line) { return value }
+            }
+            // An unterminated line already larger than a plausible cwd header can't be one — drop the
+            // buffered partial (a 600 KB attachment line costs nothing) and skip until its newline.
+            if buffer.count > maxLineBytes {
+                buffer.removeAll(keepingCapacity: true)
+                skippingOversized = true
             }
         }
+        // Trailing line with no final newline (EOF), unless we were mid-skip of an oversized line.
+        if !skippingOversized, let value = cwd(inLine: buffer) { return value }
         return nil
     }
 }

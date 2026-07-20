@@ -99,7 +99,9 @@ final class SettingsModel {
     /// then known fallback install locations.
     nonisolated private static func resolveCommandPath(_ name: String, fallbacks: [String]) -> String? {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        let found = Shell.run(shell, ["-lc", "command -v \(name)"]).stdout
+        // Bounded so a wedged login-shell rc file can't hang the resolver (callers still must run
+        // this off the MainActor — a `nonisolated` sync function executes on the caller's thread).
+        let found = Shell.run(shell, ["-lc", "command -v \(name)"], timeout: 10).stdout
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !found.isEmpty, FileManager.default.isExecutableFile(atPath: found) { return found }
         for fallback in fallbacks {
@@ -121,12 +123,16 @@ final class SettingsModel {
     /// app so hook installs stay version-matched with the running UI (a stale `~/.local/bin` copy
     /// otherwise wins via PATH and silently drops durability fixes). Fall back to login-shell PATH,
     /// then known install / dev locations.
-    private func resolveCLIPath() -> String? {
+    private func resolveCLIPath() -> String? { Self.resolveCLIPathStatic() }
+
+    /// `nonisolated` twin of `resolveCLIPath()` so it can run inside `Task.detached` (its login-shell
+    /// fallback shells out and must never block the MainActor). Reads only thread-safe globals.
+    nonisolated private static func resolveCLIPathStatic() -> String? {
         if let bundled = Bundle.main.resourceURL?.appendingPathComponent("hypermnesia").path,
            FileManager.default.isExecutableFile(atPath: bundled) {
             return bundled
         }
-        return Self.resolveCommandPath("hypermnesia", fallbacks: [
+        return resolveCommandPath("hypermnesia", fallbacks: [
             "~/.local/bin/hypermnesia",
             "~/hypermnesia/.build/debug/hypermnesia",
         ])
@@ -184,24 +190,32 @@ final class SettingsModel {
     }
 
     func registerMCPServer() {
-        guard let cli = resolveCLIPath() else {
-            statusMessage = "Couldn't find the hypermnesia CLI binary to register."
-            return
-        }
-        guard let claudeCLI = Self.resolveClaudeCLIPath() else {
-            mcpServerState = .missingClaudeCLI
-            statusMessage = "Couldn't find `claude` CLI on your login PATH."
-            return
-        }
+        // Resolve both CLIs off the MainActor: `resolveCLIPath`/`resolveClaudeCLIPath` shell out to a
+        // login shell (`claude` is never bundled, so it always spawns), which would otherwise freeze
+        // the whole Settings window before any "Checking…" feedback is even drawn.
+        let previousState = mcpServerState
         mcpServerState = .checking
         Task { [weak self] in
+            let resolved = await Task.detached { () -> (cli: String?, claude: String?) in
+                (Self.resolveCLIPathStatic(), Self.resolveClaudeCLIPath())
+            }.value
+            guard let self else { return }
+            guard let cli = resolved.cli else {
+                self.mcpServerState = previousState
+                self.statusMessage = "Couldn't find the hypermnesia CLI binary to register."
+                return
+            }
+            guard let claudeCLI = resolved.claude else {
+                self.mcpServerState = .missingClaudeCLI
+                self.statusMessage = "Couldn't find `claude` CLI on your login PATH."
+                return
+            }
             let add = await Task.detached {
                 Shell.run(claudeCLI, ["mcp", "add", "hypermnesia", "-s", "user", "--", cli, "mcp"], timeout: 25)
             }.value
             let state = await Task.detached {
                 Self.detectMCPServerState(claudeCLI: claudeCLI)
             }.value
-            guard let self else { return }
             self.mcpServerState = state
             if state == .connected || state == .registeredDisconnected {
                 self.statusMessage = "MCP server registered: hypermnesia"

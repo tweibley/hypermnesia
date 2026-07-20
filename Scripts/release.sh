@@ -132,8 +132,20 @@ if [ -n "$SPARKLE_PUBLIC_KEY" ] && [ -x "$SIGN_UPDATE" ]; then
     SIG_ATTRS="$("$SIGN_UPDATE" "$ZIP")" || SIG_ATTRS=""   # local: falls back to your Keychain key
   fi
 fi
-# Fail-soft: a release without an appcast is still a good release (update checks just
-# won't see it) — don't let a missing/failed signing key sink the whole pipeline.
+# Fail-HARD when the public key is checked in but signing produced no appcast: the feed URL is
+# releases/latest/download/appcast.xml, so publishing an appcast-less release does not merely leave
+# this version unadvertised — it 404s the feed for EVERY already-installed client until a later
+# release republishes one. A signed build must ship its appcast or not ship at all.
+# Fail-soft only when there is no checked-in public key (dormant-updater build): those releases
+# never advertised an appcast in the first place, so nothing regresses.
+if [ -z "$SIG_ATTRS" ] && [ -n "$SPARKLE_PUBLIC_KEY" ]; then
+  echo "  ✗ Appcast signing FAILED but packaging/sparkle-public-ed-key.txt is checked in." >&2
+  echo "    Shipping without dist/appcast.xml would take releases/latest/download/appcast.xml" >&2
+  echo "    offline for every installed client. Aborting the release." >&2
+  echo "    Cause: sign_update missing ($SIGN_UPDATE) or the EdDSA key is absent/invalid" >&2
+  echo "    (CI needs the SPARKLE_ED_PRIVATE_KEY secret; locally the key comes from your Keychain)." >&2
+  exit 1
+fi
 if [ -n "$SIG_ATTRS" ]; then
   cat > "$DIST/appcast.xml" <<APPCAST
 <?xml version="1.0" encoding="utf-8"?>
@@ -155,8 +167,8 @@ if [ -n "$SIG_ATTRS" ]; then
 APPCAST
   echo "▸ Appcast written to $DIST/appcast.xml"
 else
-  echo "  ⚠ Appcast skipped — no public key checked in, sign_update missing, or signing failed"
-  echo "    (CI needs the SPARKLE_ED_PRIVATE_KEY secret; locally the key comes from your Keychain)."
+  echo "  ⚠ Appcast skipped — no public key checked in (auto-update dormant in this build)."
+  echo "    Check in packaging/sparkle-public-ed-key.txt to advertise updates via the feed."
 fi
 
 echo "▸ Packaged $ZIP  ($(du -h "$ZIP" | awk '{print $1}'))"

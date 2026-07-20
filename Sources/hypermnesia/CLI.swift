@@ -1376,8 +1376,27 @@ struct Doctor: AsyncParsableCommand {
     )
 
     func run() async throws {
+        var healthy = true
         print("hypermnesia \(Hypermnesia.version)")
-        print("classifier (claude CLI): \(Self.commandExists("claude") ? "found ✓" : "MISSING ✗")")
+
+        // Report the classifier that is actually configured (what drain/backfill/classify use),
+        // not a hardcoded probe for `claude` on PATH — a Gemini user gets a false "found ✓" for a
+        // binary they never use, or a false "MISSING ✗" for one they don't need.
+        let config = AppConfigStore.loadBestEffort()
+        let classifierKind = Classifiers.Kind(rawValue: config.classifier) ?? .auto
+        let geminiKeyResolved = AppConfigStore.resolvedGeminiKey(config) != nil
+        print("classifier:              \(Classifiers.cliDescription(classifier: nil, config: config))")
+        print("  gemini key:            \(geminiKeyResolved ? "resolved ✓" : "not set")")
+        if classifierKind == .gemini, !geminiKeyResolved {
+            print("  status:                no Gemini key — classification will fail  NEEDS ATTENTION ✗")
+            healthy = false
+        }
+        // The `claude` CLI only matters when the effective classifier actually resolves to it.
+        if classifierKind == .claude || (classifierKind == .auto && !geminiKeyResolved) {
+            let claudeFound = Self.commandExists("claude")
+            print("  claude CLI:            \(claudeFound ? "found ✓" : "MISSING ✗")")
+            if !claudeFound { healthy = false }
+        }
 
         func mark(_ ok: Bool) -> String { ok ? "installed ✓" : "not installed" }
         // Hooks can be "installed" (our name is in settings.json) yet dead — the recorded binary
@@ -1430,6 +1449,7 @@ struct Doctor: AsyncParsableCommand {
             print("  processing:      \(health.processing)")
             print("  retrying:        \(health.retrying)")
             print("  terminal errors: \(health.terminalErrors)\(health.hasErrors ? "  NEEDS ATTENTION ✗" : "")")
+            if health.hasErrors { healthy = false }
             if let failure = health.lastError {
                 print("  last error:      \(failure.sessionId.prefix(8)) attempt \(failure.attempts) — \(failure.message)")
             }
@@ -1438,7 +1458,14 @@ struct Doctor: AsyncParsableCommand {
         }
         print("Drain diagnostics: \(HookDrainDiagnostics.logURL.path)")
         print("Set HYPERMNESIA_DEBUG=1 to trace hook runs on stderr.")
-        print("OK")
+        // Exit non-zero when anything above was flagged, so `hypermnesia doctor && …` and CI checks
+        // don't succeed on a machine doctor itself just marked NEEDS ATTENTION ✗.
+        if healthy {
+            print("OK")
+        } else {
+            print("NEEDS ATTENTION ✗ — see the ✗ marks above")
+            throw ExitCode.failure
+        }
     }
 
     static func commandExists(_ name: String) -> Bool {

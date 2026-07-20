@@ -143,6 +143,10 @@ public final class MemoryStore: Sendable {
             try db.execute(sql: "DELETE FROM capture_queue WHERE projectId = ?", arguments: [projectId])
             try db.execute(sql: "DELETE FROM session_progress WHERE projectId = ?", arguments: [projectId])
             try db.execute(sql: "DELETE FROM processed_session WHERE projectId = ?", arguments: [projectId])
+            // The Dream Journal (v9) holds narratives/epiphanies/proposals synthesized from this
+            // project's memories; it has no FK to memory_node, so it must be erased explicitly or it
+            // survives the wipe and keeps rendering (and keeps latestDreamNight gating the loop).
+            try db.execute(sql: "DELETE FROM dream_journal WHERE projectId = ?", arguments: [projectId])
             try db.execute(sql: "DELETE FROM memory_node WHERE projectId = ?", arguments: [projectId])
             return deleted
         }
@@ -160,6 +164,10 @@ public final class MemoryStore: Sendable {
             try db.execute(sql: "DELETE FROM capture_queue")
             try db.execute(sql: "DELETE FROM session_progress")
             try db.execute(sql: "DELETE FROM processed_session")
+            // Erase the Dream Journal (v9) too — it holds narratives/epiphanies/proposals derived
+            // from the memories being wiped and has no FK cascade, so it would otherwise survive the
+            // "remove every memory" affordance and keep displaying private transcript-derived content.
+            try db.execute(sql: "DELETE FROM dream_journal")
             try db.execute(sql: "DELETE FROM memory_node")
             return deleted
         }
@@ -472,11 +480,21 @@ public final class MemoryStore: Sendable {
 
     /// Full-text search over a project's memories, ranked by relevance.
     public func search(projectId: String, query: String, limit: Int = 20) throws -> [MemoryNode] {
-        let tokens = query
+        let rawTokens = query
             .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+        guard !rawTokens.isEmpty else { return [] }
+        // Drop stopwords so a natural-language recall query ("how should I handle auth tokens")
+        // isn't dominated by filler; keep them only if the query is nothing but stopwords.
+        let meaningful = rawTokens.filter { !DedupEngine.stopwords.contains($0.lowercased()) }
+        let used = meaningful.isEmpty ? rawTokens : meaningful
+        // OR semantics, NOT FTS5's implicit AND: a sentence-shaped query must not require every
+        // token to appear in one memory (that fails closed — see MemoryHydrator's keyword fallback).
+        // FTS5 `rank` (bm25, ORDER BY below) still floats rows matching more/rarer terms to the top,
+        // so the best hits lead.
+        let match = used
             .map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
-        guard !tokens.isEmpty else { return [] }
-        let match = tokens.joined(separator: " ")
+            .joined(separator: " OR ")
 
         return try dbQueue.read { db in
             // Scope the MATCH to this project *inside* the query (join memory_node), so the LIMIT

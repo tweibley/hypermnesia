@@ -374,7 +374,12 @@ public enum DreamRunner {
         let memories = ((try? store.allNodes(projectId: projectId)) ?? [])
         let inventory = promptInventory(memories)
         let costPerCall = DreamCompleters.estimatedCostPerCallUSD(label: config.classifierLabel)
-        let entryId = UUID().uuidString
+        // Resolve tonight's entry id UP FRONT: a manual re-dream reuses the existing
+        // `(projectId, night)` row's id, so the memory drafts stamped with `entryId` (their
+        // `conversationId`) agree with the id the entry is actually persisted under. Resolving it
+        // only at persist time broke provenance for every re-dream (drafts carried a discarded id).
+        let existingTonight = try? store.dreamEntry(projectId: projectId, night: night)
+        let entryId = existingTonight?.id ?? UUID().uuidString
         let stats = DreamStats(
             sessionsScanned: sessions.count,
             memoriesConsidered: memories.count,
@@ -401,8 +406,9 @@ public enum DreamRunner {
                     reportBacks: skillReportBacks, stats: stats,
                     note: "Dream pass failed: \(error.localizedDescription)"),
                 unread: false, calls: stats.calls, estCostUSD: stats.estCostUSD)
-            try? store.upsertDreamEntry(reusingNightId(entry, store: store))
-            return RunResult(entry: entry, skippedReason: nil, callsMade: 1)
+            let persisted = carryingForwardSkillState(entry, previous: existingTonight)
+            try? store.upsertDreamEntry(persisted)
+            return RunResult(entry: persisted, skippedReason: nil, callsMade: 1)
         }
 
         // ── Evidence validation + quality gate ────────────────────────────────────────────────
@@ -465,8 +471,9 @@ public enum DreamRunner {
             calls: stats.calls,
             estCostUSD: stats.estCostUSD)
 
+        let persisted = carryingForwardSkillState(entry, previous: existingTonight)
         do {
-            try store.upsertDreamEntry(reusingNightId(entry, store: store))
+            try store.upsertDreamEntry(persisted)
         } catch {
             return RunResult(
                 entry: nil, skippedReason: "persist failed: \(error.localizedDescription)", callsMade: 1)
@@ -481,17 +488,45 @@ public enum DreamRunner {
                 metadata: ["night": night, "skills": String(skills.count)]
             ))
         }
-        return RunResult(entry: entry, skippedReason: nil, callsMade: 1)
+        return RunResult(entry: persisted, skippedReason: nil, callsMade: 1)
     }
 
-    /// Tonight already has an entry (manual re-dream) → reuse its id so the unique
-    /// `(projectId, night)` slot is replaced, not violated.
-    private static func reusingNightId(_ entry: DreamJournalEntry, store: MemoryStore) -> DreamJournalEntry {
-        guard let existing = try? store.dreamEntry(projectId: entry.projectId, night: entry.night),
-              existing.id != entry.id else { return entry }
-        var replacement = entry
-        replacement.id = existing.id
-        return replacement
+    /// A re-dream replaces tonight's whole payload, but the durable skill lifecycle (installed /
+    /// dismissed / uninstalled) lives on the previous night's proposals — dropping it would orphan
+    /// an installed skill (no Uninstall control left) and resurface dismissed proposals as fresh
+    /// Install buttons. Carry that state forward from the previous entry for the same night.
+    static func carryingForwardSkillState(
+        _ entry: DreamJournalEntry, previous: DreamJournalEntry?
+    ) -> DreamJournalEntry {
+        guard let previous, previous.id == entry.id else { return entry }
+        var updated = entry
+        updated.payload.skillProposals = mergeSkillProposalStates(
+            new: entry.payload.skillProposals, old: previous.payload.skillProposals)
+        return updated
+    }
+
+    /// Merge a fresh set of skill proposals with the prior night's: re-proposed slugs inherit their
+    /// prior non-`proposed` lifecycle state, and installed/uninstalled skills the new dream didn't
+    /// re-propose are preserved so their journal card (and its Uninstall control) never vanishes.
+    static func mergeSkillProposalStates(
+        new: [DreamSkillProposal], old: [DreamSkillProposal]
+    ) -> [DreamSkillProposal] {
+        var oldBySlug: [String: DreamSkillProposal] = [:]
+        for proposal in old { oldBySlug[proposal.slug] = proposal }
+        var merged: [DreamSkillProposal] = []
+        var usedSlugs = Set<String>()
+        for var proposal in new {
+            if let prior = oldBySlug[proposal.slug], prior.state != .proposed {
+                proposal.state = prior.state
+            }
+            merged.append(proposal)
+            usedSlugs.insert(proposal.slug)
+        }
+        for prior in old where !usedSlugs.contains(prior.slug)
+            && (prior.state == .installed || prior.state == .uninstalled) {
+            merged.append(prior)
+        }
+        return merged
     }
 
     /// What the model sees: confirmed first (newest-touched), then drafts, bounded.

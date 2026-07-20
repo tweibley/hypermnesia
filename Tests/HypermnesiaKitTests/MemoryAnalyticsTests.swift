@@ -51,8 +51,10 @@ struct MemoryAnalyticsTests {
     @Test("belief isolates 'low because untrusted' (full freshness) from 'low because old' (full belief)")
     func beliefVsFreshness() {
         // Untrusted but fresh: stored 0.4 at 5 days → belief 40%, freshness 100%.
+        // Override rate = overrides / (successes + overrides) = 5 / (5 + 5) = 0.5.
         let untrusted = MemoryAnalytics.confidenceBreakdown(
-            for: convention(belief: nil, ageDays: 5, confidence: 0.4, timesApplied: 10, timesOverridden: 5), now: now)
+            for: convention(belief: nil, ageDays: 5, confidence: 0.4, timesApplied: 10,
+                            timesOverridden: 5, timesAppliedSuccess: 5), now: now)
         #expect(abs(untrusted.freshness - 1.0) < 1e-9)
         #expect(abs(untrusted.belief - 0.4) < 1e-9)
         #expect(abs(untrusted.overrideRate - 0.5) < 1e-9)
@@ -127,11 +129,14 @@ struct MemoryAnalyticsTests {
         #expect(abs(vm.kpis.belowInjectionThresholdRate - (1.0 / 3.0)) < 1e-9)
     }
 
-    @Test("aggregate override rate = Σoverridden / max(Σapplied, 1)")
+    @Test("aggregate override rate = Σoverridden / max(Σ(successes+overrides), 1)")
     func aggregateOverrideRate() {
+        // Denominator is application outcomes (successes + overrides), matching
+        // BeliefEngine.applicationFactor — never the legacy sighting counter (timesApplied).
+        // Σoverridden = 5, Σsuccesses = 15 → 5 / (15 + 5) = 5/20.
         let nodes = [
-            convention(belief: 0.9, ageDays: 1, timesApplied: 10, timesOverridden: 2),
-            convention(belief: 0.9, ageDays: 1, timesApplied: 10, timesOverridden: 3),
+            convention(belief: 0.9, ageDays: 1, timesApplied: 10, timesOverridden: 2, timesAppliedSuccess: 8),
+            convention(belief: 0.9, ageDays: 1, timesApplied: 10, timesOverridden: 3, timesAppliedSuccess: 7),
         ]
         let vm = MemoryAnalytics.projectTrends(nodes: nodes, window: .days7, now: now)
         #expect(abs(vm.kpis.aggregateOverrideRate - (5.0 / 20.0)) < 1e-9)

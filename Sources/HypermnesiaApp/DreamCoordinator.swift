@@ -91,8 +91,12 @@ extension AppModel {
     /// user is watching. Runs under the consent just shown (even before nightly dreams are enabled),
     /// counts against tonight's cap, and ends in the REM replay when the dream has content.
     func runFirstDream(project: String) async {
-        guard let store else { return }
+        guard let store, !dreamPassRunning else { return }
         guard ((try? store.dreamEntries(limit: 1)) ?? []).isEmpty else { return }
+        // Hold the shared dream gate for the whole pass so the nightly loop and "Dream now" can't
+        // start a concurrent dream for the same night.
+        dreamPassRunning = true
+        defer { dreamPassRunning = false }
         processingStatus = "Dreaming over your history…"
         let config = AppConfigStore.loadBestEffort()
         let result = await Task.detached {
@@ -177,8 +181,12 @@ extension AppModel {
     /// Manual "Dream now" for one project (Settings / journal button). Ignores idle/cap gating;
     /// replaces tonight's entry.
     func dreamNow(project: String) {
-        guard let store, !isProcessing else { return }
+        // A single re-entrancy gate across all three dream entry points: `dreamPassRunning` is set
+        // by the nightly pass and `runFirstDream` too, so a manual dream can never run concurrently
+        // with them (two dreams for one night destroy each other's journal entry via upsert).
+        guard let store, !isProcessing, !dreamPassRunning else { return }
         isProcessing = true
+        dreamPassRunning = true
         processingStatus = "Dreaming…"
         Task { [weak self] in
             guard let self else { return }
@@ -188,6 +196,7 @@ extension AppModel {
             }.value
             Self.recordDreamCalls(result.callsMade)
             self.isProcessing = false
+            self.dreamPassRunning = false
             self.refreshUnreadDreams()
             self.reloadMemories()
             if let reason = result.skippedReason {

@@ -93,7 +93,9 @@ public struct MCPHandler: Sendable {
         let args = params["arguments"] as? [String: Any] ?? [:]
         switch name {
         case "recall":  return toolResult(id, await recall(args))
-        case "ask":     return toolResult(id, await ask(args))
+        case "ask":
+            let outcome = await ask(args)
+            return toolResult(id, outcome.text, isError: outcome.isError)
         case "remember":
             let outcome = remember(args)
             return toolResult(id, outcome.text, isError: outcome.isError)
@@ -134,12 +136,21 @@ public struct MCPHandler: Sendable {
         return "No relevant memories for \(projectId)."
     }
 
-    private func ask(_ args: [String: Any]) async -> String {
-        guard let question = args["question"] as? String, !question.isEmpty else { return "Provide a `question`." }
+    private func ask(_ args: [String: Any]) async -> (text: String, isError: Bool) {
+        guard let question = args["question"] as? String, !question.isEmpty else {
+            return ("Provide a `question`.", true)
+        }
         let projectId = resolveProject(args["project"] as? String)
-        let answer = try? await MemoryQA.ask(question, store: store, projectId: projectId,
-                                             completer: Completers.makeFromConfig(), embedder: AppleEmbedder())
-        return answer?.answer ?? "Couldn't answer that."
+        do {
+            let answer = try await MemoryQA.ask(question, store: store, projectId: projectId,
+                                                completer: Completers.makeFromConfig(), embedder: AppleEmbedder())
+            return (answer.answer, false)
+        } catch {
+            // Surface backend/LLM failures (e.g. a missing classifier binary or an exhausted credit
+            // balance) as an MCP error, so the agent can distinguish "no answer" from "backend
+            // broken" instead of treating a swallowed error as a successful, empty result.
+            return ("Ask failed: \(error.localizedDescription)", true)
+        }
     }
 
     private func remember(_ args: [String: Any]) -> (text: String, isError: Bool) {
@@ -163,11 +174,35 @@ public struct MCPHandler: Sendable {
         // capture. Drafts are never injected into sessions until confirmed in the app.
         var node = MemoryNode(projectId: projectId, type: type, status: .draft,
                               title: title, summary: summary, data: data)
-        // Link a contradicted memory (same topic, different substance) so confirming this draft
-        // supersedes it — same revision flow as captured memories.
         let pool = (try? store.allNodes(projectId: projectId, type: type)) ?? []
-        if DedupEngine.duplicate(of: node, in: pool) == nil,
-           let conflicting = ConflictEngine.conflict(of: node, in: pool) {
+        // If this repeats an existing memory, reinforce it (a repeat *sighting*) instead of
+        // inserting yet another draft — matching every other write path (SessionIngestor.reconcile,
+        // DreamRunner). Otherwise each repeated `remember` call clutters the review inbox with a
+        // fresh duplicate and the existing memory never accrues a reinforcement signal.
+        if let dup = DedupEngine.duplicate(of: node, in: pool), var existing = try? store.node(id: dup.id) {
+            let now = Date()
+            existing.timesApplied += 1
+            existing.timesSighted += 1
+            existing.lastValidatedAt = now
+            existing.updatedAt = now
+            do {
+                try store.upsert(existing)
+            } catch {
+                return ("Failed to reinforce memory: \(error.localizedDescription). Nothing was stored — please retry.", true)
+            }
+            MemoryActivityLog.append(.init(
+                projectId: projectId,
+                eventType: .capture,
+                memoryIds: [existing.id],
+                count: 1,
+                metadata: ["source": "mcp_remember", "reinforced": "true"]
+            ))
+            return ("Reinforced existing memory “\(existing.title)” in \(projectId) "
+                + "(sighted \(existing.timesSighted)×). No duplicate draft was created.", false)
+        }
+        // Not a duplicate. Link a contradicted memory (same topic, different substance) so confirming
+        // this draft supersedes it — same revision flow as captured memories.
+        if let conflicting = ConflictEngine.conflict(of: node, in: pool) {
             node.supersedesId = conflicting.id
         }
         do {

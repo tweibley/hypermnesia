@@ -142,7 +142,6 @@ final class AppModel {
     }
 
     func open() {
-        ensureClassifierEnv()
         do {
             store = try MemoryStore()
             storeError = nil
@@ -151,6 +150,9 @@ final class AppModel {
         } catch {
             storeError = error.localizedDescription
         }
+        // Fire-and-forget: resolving the key spawns a login shell, which must never block the launch
+        // path. The classifier only runs on the drain tick, so a slightly-late key is harmless.
+        ensureClassifierEnv()
     }
 
     // MARK: - First-capture moment
@@ -202,7 +204,11 @@ final class AppModel {
         // Animate the diff so memories landed by the background drain visibly arrive in the list
         // (and triaged rows visibly leave) instead of appearing on the next full redraw.
         withAnimation(.snappy) {
-            memories = (try? store.nodes(projectId: project, type: typeFilter, status: nil)) ?? []
+            // The main browse list, filtered search, health groups, graph and MRI all read `memories`,
+            // so it must be the whole corpus — `nodes(...)` inherits a UI-oriented `limit: 500` that
+            // silently hides everything past the 500 most-recent rows (and contradicts the uncapped
+            // sidebar counts). `allNodes` is the "consider every candidate" query for exactly this.
+            memories = (try? store.allNodes(projectId: project, type: typeFilter, status: nil)) ?? []
         }
         runSearch()
         refreshTotalDraftCount()
@@ -648,24 +654,37 @@ final class AppModel {
         }
     }
 
-    /// Confirm a draft and jump to the next one — for rapid keyboard review. Next is computed AFTER
-    /// the mutation + reload, so it can't land on a just-purged duplicate.
+    /// Confirm a draft and jump to the next one — for rapid keyboard review. The next id is computed
+    /// BEFORE the mutation: confirm/delete reload `memories`, which drops the acted-on node out of
+    /// `drafts` entirely, so computing afterwards can never locate it and always snaps back to the
+    /// first draft.
     func confirmAndAdvance(_ node: MemoryNode) {
+        let next = nextDraftID(after: node.id)
         confirm(node)
-        selectedMemoryID = nextDraftID(after: node.id)
+        selectedMemoryID = next
     }
 
     func dismissAndAdvance(_ node: MemoryNode) {
+        let next = nextDraftID(after: node.id)
         delete(node)
-        selectedMemoryID = nextDraftID(after: node.id)
+        selectedMemoryID = next
     }
 
+    /// The draft that visually follows `id` in the review list. Derived from the same session
+    /// grouping the list renders (`MemoryListView.sessionGroups`) so navigation, the "N of M"
+    /// progress readout, and the visible rows all agree. Call this before mutating `id`.
     private func nextDraftID(after id: String) -> String? {
-        let drafts = filteredMemories.filter { $0.status == .draft }
-        if let i = drafts.firstIndex(where: { $0.id == id }), i + 1 < drafts.count {
-            return drafts[i + 1].id
+        let drafts = MemoryListView
+            .sessionGroups(filteredMemories.filter { $0.status == .draft })
+            .flatMap(\.nodes)
+        guard let i = drafts.firstIndex(where: { $0.id == id }) else {
+            return drafts.first(where: { $0.id != id })?.id
         }
-        return drafts.first(where: { $0.id != id })?.id
+        // Prefer the following draft; if this was the last one, the list shrinks after the mutation
+        // so the preceding draft becomes the sensible landing spot.
+        if i + 1 < drafts.count { return drafts[i + 1].id }
+        if i - 1 >= 0 { return drafts[i - 1].id }
+        return nil
     }
 
     /// Edit a memory's title/summary; invalidates its embedding so it re-indexes semantically.
@@ -727,9 +746,17 @@ final class AppModel {
     private func ensureClassifierEnv() {
         guard (ProcessInfo.processInfo.environment["GEMINI_API_KEY"] ?? "").isEmpty else { return }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        let key = Shell.run(shell, ["-lc", "printf %s \"$GEMINI_API_KEY\""])
-            .stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !key.isEmpty { setenv("GEMINI_API_KEY", key, 1) }
+        // Off the MainActor and time-bounded: `Shell.run` blocks in `waitUntilExit()`, and a
+        // Finder-launched app never inherits GEMINI_API_KEY, so this spawn happens on every launch.
+        // A pathological rc file must not be able to wedge the app — cap the wait at 5s.
+        Task { [weak self] in
+            let key = await Task.detached {
+                Shell.run(shell, ["-lc", "printf %s \"$GEMINI_API_KEY\""], timeout: 5)
+                    .stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            }.value
+            guard self != nil, !key.isEmpty else { return }
+            setenv("GEMINI_API_KEY", key, 1)
+        }
     }
 
     /// While the app runs, periodically classify any sessions the hooks have queued.

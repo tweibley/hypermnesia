@@ -6,7 +6,12 @@ import HypermnesiaKit
 /// possible, an IDE window via its URL scheme, else plain app activation.
 @MainActor
 enum SessionFocus {
-    static func focus(_ event: SessionEvent) {
+    /// Returns `true` only when a host app was actually activated / opened. A session hosted under
+    /// tmux, screen or SSH has no GUI app in its pid chain and no `.app` on disk to relaunch, so
+    /// there is nothing session-specific to jump to — that returns `false`, letting the caller keep
+    /// the card up instead of dismissing it into a silent no-op.
+    @discardableResult
+    static func focus(_ event: SessionEvent) -> Bool {
         // Nearest ancestor that is a real GUI app = the terminal/IDE hosting the session.
         let host = event.hostPids.lazy
             .compactMap { NSRunningApplication(processIdentifier: $0) }
@@ -16,27 +21,33 @@ enum SessionFocus {
             if let tty = sanitizedTTY(event.tty), let bundleId = host.bundleIdentifier,
                let script = terminalTabScript(bundleId: bundleId, tty: tty),
                runAppleScript(script) {
-                return   // the script selects the tab and activates the app
+                return true   // the script selects the tab and activates the app
             }
             if let bundleId = host.bundleIdentifier, let scheme = Self.ideSchemes[bundleId],
                let cwd = event.cwd,
                let encoded = cwd.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
                let url = URL(string: "\(scheme)://file\(encoded)") {
                 NSWorkspace.shared.open(url)   // routes to the window with that folder open
-                return
+                return true
             }
             if let bundleURL = host.bundleURL {
                 NSWorkspace.shared.openApplication(at: bundleURL, configuration: NSWorkspace.OpenConfiguration())
             } else {
                 host.activate()
             }
-            return
+            return true
         }
 
         // Host processes are gone (terminal quit since the event) — relaunch/activate its .app.
         if let bundleURL = event.hostPaths.lazy.compactMap(bundleURL(fromExecutablePath:)).first {
             NSWorkspace.shared.openApplication(at: bundleURL, configuration: NSWorkspace.OpenConfiguration())
+            return true
         }
+
+        // No GUI host resolvable (tmux/screen/ssh): don't leave the click a silent no-op — surface
+        // the app so there's visible feedback — and report failure so the card isn't dismissed.
+        WindowSupport.bringToFront()
+        return false
     }
 
     /// IDEs whose `<scheme>://file<path>` deep link focuses the window that has the folder open.

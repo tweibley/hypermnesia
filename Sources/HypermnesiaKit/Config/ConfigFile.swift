@@ -42,7 +42,26 @@ public enum ConfigFile {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: url, options: .atomic)
+        // If the path is a symlink (a common dotfiles setup, e.g. ~/.claude/settings.json linked
+        // into a repo), an atomic write would replace the *link* with a plain file and silently
+        // detach the user's dotfiles from their config. Follow the link and write through to its
+        // target so the managed file — and the symlink pointing at it — both survive.
+        let target = resolveSymlink(url)
+        // An atomic write creates a fresh inode with default permissions; capture the existing mode
+        // first so we can restore it and not clobber a file the user (or their repo) set to 0600.
+        let existingMode = (try? FileManager.default.attributesOfItem(atPath: target.path))?[.posixPermissions] as? NSNumber
+        try data.write(to: target, options: .atomic)
+        if let existingMode {
+            try? FileManager.default.setAttributes([.posixPermissions: existingMode], ofItemAtPath: target.path)
+        }
+    }
+
+    /// If `url` itself is a symbolic link, return the file it resolves to; otherwise return `url`
+    /// unchanged. Uses `isSymbolicLinkKey` (which does not traverse the link) to decide, so a plain
+    /// file is written in place exactly as before.
+    private static func resolveSymlink(_ url: URL) -> URL {
+        let isSymlink = (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink ?? false
+        return isSymlink ? url.resolvingSymlinksInPath() : url
     }
 
     /// Single-quote a path for embedding in a shell command string (hook commands), so a binary
