@@ -9,8 +9,10 @@ The marketing site — a single static page served from Cloudflare Workers stati
   `www.hypermnesia.app` custom domains (DNS + certs are created automatically since
   the zone is on the same Cloudflare account).
 
-The page makes zero third-party requests (fonts self-hosted, no analytics) — keep it
-that way; it's part of the local-first pitch and stated on the page itself.
+The page self-hosts its fonts and makes a single third-party request: privacy-friendly
+PostHog page analytics (no memory content ever leaves the device, and the app itself sends
+zero telemetry). Keep that boundary — it's part of the local-first pitch and is disclosed
+in the page's Privacy section.
 
 ## Deploy
 

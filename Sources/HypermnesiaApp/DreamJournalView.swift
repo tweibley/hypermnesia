@@ -76,12 +76,12 @@ struct DreamJournalView: View {
             }
             Spacer()
             if let project = model.selectedProject ?? selectedEntry?.projectId {
-                Button(model.isProcessing ? "Dreaming…" : "Dream now") {
+                Button((model.isProcessing || model.dreamPassRunning) ? "Dreaming…" : "Dream now") {
                     model.dreamNow(project: project)
                     // Results land on the next reload tick.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { reload() }
                 }
-                .disabled(model.isProcessing)
+                .disabled(model.isProcessing || model.dreamPassRunning)
                 .help("Run tonight's dream for \(projectDisplayName(project)) right now (1 classifier call)")
             }
             Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
@@ -616,9 +616,14 @@ struct DreamJournalView: View {
 
     private func uninstall(_ proposal: DreamSkillProposal, entry: DreamJournalEntry) {
         do {
-            _ = try SkillInstaller.uninstall(slug: proposal.slug)
+            // Remove the copy THIS project's card installed: prefer the project-scoped record for
+            // this project, else the user-global one. Never fall back to a bare slug match — that
+            // could delete another project's same-named skill (the install/uninstall-scope bug).
+            let record = try (try? SkillInstaller.uninstall(
+                slug: proposal.slug, scope: "project", projectId: entry.projectId))
+                ?? SkillInstaller.uninstall(slug: proposal.slug, scope: "user")
             setSkillState(proposal, entry: entry, state: .uninstalled)
-            statusLine = "Uninstalled \(proposal.slug) — its directory and mirrors are gone."
+            statusLine = "Uninstalled \(record.slug) — its directory and mirrors are gone."
         } catch {
             statusLine = "Uninstall failed: \(error.localizedDescription)"
         }

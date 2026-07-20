@@ -94,14 +94,14 @@ final class NotchStatusController {
         guard config.notchEnabled else { panel.update(cards: [], working: []); return }
 
         let events = SessionEventLog.recent()
-        var cards = SessionEventFeed.cards(events: events, dismissedEventIds: dismissedEventIds)
-        cards.removeAll { card in
-            switch card.event.kind {
-            case .attention: !config.notchOnNeedsAttention
-            case .finished: !config.notchOnAgentFinish
-            case .ended, .working: true   // never pop cards; working is the strip below
-            }
-        }
+        // Cap the poppable cards over ONLY the kinds the user enabled, so a disabled kind (e.g.
+        // attention pops) can't consume the maxCards budget and starve an enabled one (finished).
+        // ended/working are never pops — working is the strip below; both are excluded by omission.
+        var allowedKinds: Set<SessionEvent.Kind> = []
+        if config.notchOnNeedsAttention { allowedKinds.insert(.attention) }
+        if config.notchOnAgentFinish { allowedKinds.insert(.finished) }
+        var cards = SessionEventFeed.cards(
+            events: events, dismissedEventIds: dismissedEventIds, allowedKinds: allowedKinds)
         var working = config.notchShowWorking ? SessionEventFeed.working(events: events) : []
         // A working row for a dead host is a lie — if every process recorded at hook time is gone
         // (crashed agent, closed terminal), the turn can't still be running.
@@ -134,17 +134,21 @@ final class NotchStatusController {
     /// Card clicked: jump back to that exact session. Pop cards are cleared; a working row stays
     /// live (the frontmost filter hides it the moment the jump lands).
     func activate(_ card: SessionEventFeed.Card) {
-        if card.event.kind != .working {
-            markDismissed(card.event.id)
-        }
         // The dream chip jumps into the Dream Journal, not a host session.
         if card.event.client == "hypermnesia" {
+            if card.event.kind != .working { markDismissed(card.event.id) }
             WindowSupport.bringToFront()
             NotificationCenter.default.post(name: .hypermnesiaOpenDreamJournal, object: nil)
             refresh()
             return
         }
-        SessionFocus.focus(card.event)
+        // Jump to that exact session, but only dismiss the pop if we actually landed somewhere: a
+        // tmux/screen/ssh session has no GUI host in its pid chain (focus returns false), so keep
+        // the card up instead of dismissing it into a silent no-op. Working rows are never dismissed.
+        let focused = SessionFocus.focus(card.event)
+        if focused, card.event.kind != .working {
+            markDismissed(card.event.id)
+        }
         refresh()
     }
 

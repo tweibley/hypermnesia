@@ -231,9 +231,14 @@ struct CLIContractTests {
         let responses = try lines.map {
             try #require(JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any])
         }
-        #expect(responses.compactMap { $0["id"] as? Int } == [1, 2])
         #expect(responses.allSatisfy { ($0["jsonrpc"] as? String) == "2.0" })
-        let toolsResult = try #require(responses[1]["result"] as? [String: Any])
+        // Requests are handled concurrently, so JSON-RPC responses may legally arrive in any order —
+        // match by id rather than position (the notification carries no id and is suppressed).
+        let byId = Dictionary(
+            responses.compactMap { r in (r["id"] as? Int).map { ($0, r) } },
+            uniquingKeysWith: { a, _ in a })
+        #expect(Set(byId.keys) == [1, 2])
+        let toolsResult = try #require(byId[2]?["result"] as? [String: Any])
         let tools = (toolsResult["tools"] as? [[String: Any]]) ?? []
         #expect(Set(tools.compactMap { $0["name"] as? String }) == ["recall", "ask", "remember"])
     }

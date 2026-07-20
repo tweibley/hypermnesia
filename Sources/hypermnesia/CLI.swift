@@ -1158,16 +1158,28 @@ struct Backfill: AsyncParsableCommand {
         let status: MemoryStatus = confirm ? .confirmed : .draft
         var totalMemories = 0
 
+        var failed = 0
         for (index, t) in pending.enumerated() {
-            let count = await SessionIngestor.ingest(
+            switch await SessionIngestor.ingestSession(
                 transcript: t.url, sessionId: t.sessionId, projectId: projectId,
                 classifier: engine, store: store, source: .backfill, status: status
-            )
-            totalMemories += count
-            print("[\(index + 1)/\(pending.count)] \(t.sessionId.prefix(8))  → \(count) memories")
+            ) {
+            case .captured(let count):
+                totalMemories += count
+                print("[\(index + 1)/\(pending.count)] \(t.sessionId.prefix(8))  → \(count) memories")
+            case .waiting:
+                print("[\(index + 1)/\(pending.count)] \(t.sessionId.prefix(8))  → skipped (still being captured live)")
+            case .failed(let reason, _):
+                failed += 1
+                print("[\(index + 1)/\(pending.count)] \(t.sessionId.prefix(8))  → failed: \(reason)")
+            }
         }
 
         print("\nBackfilled \(totalMemories) memories into \(projectId). Open the app to review.")
+        if failed > 0 {
+            print("\(failed) session(s) failed (not memory-less) — check your classifier configuration "
+                + "with `hypermnesia doctor`, then re-run to retry them.")
+        }
     }
 
     /// Backfill across every project with transcripts, classifying each unprocessed session directly
@@ -1182,8 +1194,11 @@ struct Backfill: AsyncParsableCommand {
             for transcript in ClaudeCodeSessions.allTranscripts() {
                 if (try? store.isProcessed(sessionId: transcript.sessionId)) == true { continue }
                 if SessionIngestor.isLikelyLive(modifiedAt: transcript.modifiedAt) { liveSkipped += 1; continue }
-                guard let cwd = ClaudeCodeSessions.firstCwd(of: transcript.url),
-                      !ClaudeCodeSessions.isEphemeral(cwd: cwd) else { continue }
+                guard let cwd = ClaudeCodeSessions.firstCwd(of: transcript.url) else {
+                    // cwd unreadable (not just ephemeral) — report it instead of vanishing from the count.
+                    undecodable.insert(transcript.sessionId); continue
+                }
+                guard !ClaudeCodeSessions.isEphemeral(cwd: cwd) else { continue }
                 candidates.append((transcript.sessionId, transcript.url, cwd))
             }
         case .cursor:
@@ -1216,9 +1231,15 @@ struct Backfill: AsyncParsableCommand {
         print("Found \(candidates.count) unprocessed session(s) across all projects."
             + (liveSkipped > 0 ? " (\(liveSkipped) recently-active session(s) skipped.)" : ""))
         if !undecodable.isEmpty {
-            let what = client == .cursor
-                ? "Cursor project dir(s) whose original path couldn't be recovered (the workspace was moved or deleted)"
-                : "Antigravity conversation(s) with no recoverable workspace directory"
+            let what: String
+            switch client {
+            case .cursor:
+                what = "Cursor project dir(s) whose original path couldn't be recovered (the workspace was moved or deleted)"
+            case .antigravity:
+                what = "Antigravity conversation(s) with no recoverable workspace directory"
+            case .claude:
+                what = "Claude Code session(s) whose working directory couldn't be read from the transcript"
+            }
             print("Skipped \(undecodable.count) \(what): \(undecodable.sorted().joined(separator: ", "))")
         }
         if let limit, candidates.count > limit {
@@ -1236,16 +1257,25 @@ struct Backfill: AsyncParsableCommand {
         let engine = Classifiers.forCLI(classifier: classifier, model: model)
         let status: MemoryStatus = confirm ? .confirmed : .draft
         var total = 0
+        var failed = 0
         for (index, candidate) in candidates.enumerated() {
-            let count = await SessionIngestor.ingest(
+            switch await SessionIngestor.ingestSession(
                 transcript: candidate.url, sessionId: candidate.sessionId,
                 projectId: ProjectIdentity.resolve(cwd: candidate.cwd),
                 classifier: engine, store: store, source: .backfill, status: status
-            )
-            total += count
-            print("[\(index + 1)/\(candidates.count)] \(candidate.sessionId.prefix(8))  → \(count) memories")
+            ) {
+            case .captured(let count):
+                total += count
+                print("[\(index + 1)/\(candidates.count)] \(candidate.sessionId.prefix(8))  → \(count) memories")
+            case .waiting:
+                print("[\(index + 1)/\(candidates.count)] \(candidate.sessionId.prefix(8))  → skipped (still being captured live)")
+            case .failed(let reason, _):
+                failed += 1
+                print("[\(index + 1)/\(candidates.count)] \(candidate.sessionId.prefix(8))  → failed: \(reason)")
+            }
         }
-        print("Added \(total) memories.")
+        print("Added \(total) memories."
+            + (failed > 0 ? " \(failed) session(s) failed to classify — check `hypermnesia doctor` and re-run." : ""))
     }
 }
 

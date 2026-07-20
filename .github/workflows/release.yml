@@ -111,4 +111,7 @@ jobs:
             dist/Hypermnesia-${{ steps.pkg.outputs.version }}.zip
             dist/Hypermnesia.zip
             dist/appcast.xml
+          # Fail the release rather than publish silently missing a listed asset (e.g. a dropped
+          # appcast.xml would 404 every installed user's Sparkle update check).
+          fail_on_unmatched_files: true
           generate_release_notes: true
