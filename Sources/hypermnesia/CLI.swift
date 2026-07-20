@@ -1461,12 +1461,17 @@ struct Doctor: AsyncParsableCommand {
         // Hooks can be "installed" (our name is in settings.json) yet dead — the recorded binary
         // path no longer exists after the app is moved/translocated. Report that distinctly instead
         // of a false "installed ✓".
-        func hookMark(projectPath: String? = nil) -> String {
-            guard HookInstaller.isInstalled(projectPath: projectPath) else { return "not installed" }
-            if let missing = HookInstaller.missingBinaryPaths(projectPath: projectPath).first {
+        func hookHealthMark(installed: Bool, missing: String?) -> String {
+            guard installed else { return "not installed" }
+            if let missing {
                 return "installed but binary missing at \(missing) — re-run install-hooks ✗"
             }
             return "installed ✓"
+        }
+        func hookMark(projectPath: String? = nil) -> String {
+            hookHealthMark(
+                installed: HookInstaller.isInstalled(projectPath: projectPath),
+                missing: HookInstaller.missingBinaryPaths(projectPath: projectPath).first)
         }
         print("\nClaude Code (user-global):")
         print("  capture hooks:   \(hookMark())")
@@ -1492,13 +1497,13 @@ struct Doctor: AsyncParsableCommand {
 
         let cursorPresent = FileManager.default.fileExists(atPath: CursorSessions.projectsDirectory.deletingLastPathComponent().path)
         print("\nCursor\(cursorPresent ? "" : " (no ~/.cursor — app not set up?)"):")
-        print("  capture hooks:   \(mark(CursorHookInstaller.isInstalled())) (\(CursorHookInstaller.settingsURL().path))")
+        print("  capture hooks:   \(hookHealthMark(installed: CursorHookInstaller.isInstalled(), missing: CursorHookInstaller.missingBinaryPaths().first)) (\(CursorHookInstaller.settingsURL().path))")
         print("  MCP server:      \(CursorMCPInstaller.isInstalled() ? "registered ✓" : "not registered") (\(CursorMCPInstaller.configURL().path))")
 
         let antigravityPresent = FileManager.default.fileExists(
             atPath: URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".gemini").path)
         print("\nAntigravity\(antigravityPresent ? "" : " (no ~/.gemini — app not set up?)"):")
-        print("  capture hooks:   \(mark(AntigravityHookInstaller.isInstalled())) (\(AntigravityHookInstaller.settingsURL().path))")
+        print("  capture hooks:   \(hookHealthMark(installed: AntigravityHookInstaller.isInstalled(), missing: AntigravityHookInstaller.missingBinaryPaths().first)) (\(AntigravityHookInstaller.settingsURL().path))")
         print("  MCP server:      \(AntigravityMCPInstaller.isInstalled() ? "registered ✓" : "not registered") (\(AntigravityMCPInstaller.configURL().path))")
 
         print("\nStore: \(StoreLocation.supportDirectory.appendingPathComponent("memory.db").path)")

@@ -42,6 +42,10 @@ final class SettingsModel {
     var cursorMCPInstalled: Bool
     var antigravityHooksInstalled: Bool
     var antigravityMCPInstalled: Bool
+    /// Cursor/Antigravity hooks recorded but pointing at a vanished binary (the app was moved after
+    /// install) — the same silent capture death as `hooksBinaryMissing`; a reinstall re-points them.
+    var cursorHooksBinaryMissing = false
+    var antigravityHooksBinaryMissing = false
     var statusMessage: String?
     var configPersistenceError: String?
 
@@ -240,6 +244,7 @@ final class SettingsModel {
         do {
             if install { try CursorHookInstaller.install(binaryPath: cli) } else { try CursorHookInstaller.uninstall() }
             cursorHooksInstalled = CursorHookInstaller.isInstalled()
+            cursorHooksBinaryMissing = CursorHookInstaller.hasMissingBinary()
             statusMessage = install ? "Cursor hooks installed — new Cursor sessions will build memory." : "Cursor hooks removed."
         } catch {
             statusMessage = error.localizedDescription
@@ -276,6 +281,7 @@ final class SettingsModel {
         do {
             if install { try AntigravityHookInstaller.install(binaryPath: cli) } else { try AntigravityHookInstaller.uninstall() }
             antigravityHooksInstalled = AntigravityHookInstaller.isInstalled()
+            antigravityHooksBinaryMissing = AntigravityHookInstaller.hasMissingBinary()
             statusMessage = install
                 ? "Antigravity hooks installed — new conversations will build memory."
                 : "Antigravity hooks removed."
@@ -312,9 +318,13 @@ final class SettingsModel {
         cursorMCPInstalled = CursorMCPInstaller.isInstalled()
         antigravityHooksInstalled = AntigravityHookInstaller.isInstalled()
         antigravityMCPInstalled = AntigravityMCPInstaller.isInstalled()
+        cursorHooksBinaryMissing = CursorHookInstaller.hasMissingBinary()
+        antigravityHooksBinaryMissing = AntigravityHookInstaller.hasMissingBinary()
         hooksNeedUpdate = HookInstaller.needsReinstall()
             || CursorHookInstaller.needsReinstall()
             || AntigravityHookInstaller.needsReinstall()
+            || cursorHooksBinaryMissing
+            || antigravityHooksBinaryMissing
         launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
         refreshMCPServerStatus()
     }
@@ -325,9 +335,13 @@ final class SettingsModel {
         if HookInstaller.isInstalled() { setHooks(true) }
         if CursorHookInstaller.isInstalled() { setCursorHooks(true) }
         if AntigravityHookInstaller.isInstalled() { setAntigravityHooks(true) }
+        cursorHooksBinaryMissing = CursorHookInstaller.hasMissingBinary()
+        antigravityHooksBinaryMissing = AntigravityHookInstaller.hasMissingBinary()
         hooksNeedUpdate = HookInstaller.needsReinstall()
             || CursorHookInstaller.needsReinstall()
             || AntigravityHookInstaller.needsReinstall()
+            || cursorHooksBinaryMissing
+            || antigravityHooksBinaryMissing
         if !hooksNeedUpdate { statusMessage = "Hooks updated — sessions now report live status." }
     }
 
@@ -987,16 +1001,20 @@ private struct NotchSettings: View {
         )
 
         if model.hooksNeedUpdate {
+            let brokenPath = model.cursorHooksBinaryMissing || model.antigravityHooksBinaryMissing
             GroupBox {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.caution)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Your hooks predate notch status").font(.callout.weight(.semibold))
-                        Text("Re-install adds the session-event hooks (working heartbeats, Stop, Notification) without touching anything else.")
+                        Text(brokenPath ? "A client's capture hooks are broken" : "Your hooks predate notch status")
+                            .font(.callout.weight(.semibold))
+                        Text(brokenPath
+                            ? "A Cursor or Antigravity hook points at a CLI path that's gone (the app was moved after install), so capture and hydration are silently off. Re-install re-points the hooks at this app."
+                            : "Re-install adds the session-event hooks (working heartbeats, Stop, Notification) without touching anything else.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 8)
-                    Button("Update hooks") { model.updateHooksForNotch() }
+                    Button(brokenPath ? "Reinstall" : "Update hooks") { model.updateHooksForNotch() }
                         .buttonStyle(.borderedProminent).controlSize(.small)
                 }
                 .padding(6)

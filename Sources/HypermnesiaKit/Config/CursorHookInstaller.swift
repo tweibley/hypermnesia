@@ -85,6 +85,39 @@ public enum CursorHookInstaller {
         }
     }
 
+    /// Recorded hook binaries (the app-bundle CLI path baked into each command). Detects a dead
+    /// install after the app is moved/translocated: `isInstalled` stays true but the binary no longer
+    /// exists, so every Cursor hook exec silently fails. Reuses HookInstaller's shell-quoted-token
+    /// parse; Cursor's flat `{command,type}` entries carry the command directly.
+    public static func installedBinaryPaths(projectPath: String? = nil) -> [String] {
+        guard let hooks = read(settingsURL(projectPath: projectPath))["hooks"] as? [String: Any] else { return [] }
+        var paths: [String] = []
+        for entries in hooks.values {
+            guard let array = entries as? [[String: Any]] else { continue }
+            for entry in array where entryHasMarker(entry) {
+                guard let command = entry["command"] as? String,
+                      let path = HookInstaller.recordedBinaryPath(inCommand: command),
+                      !paths.contains(path) else { continue }
+                paths.append(path)
+            }
+        }
+        return paths
+    }
+
+    /// Recorded hook binaries that no longer exist / aren't executable — the hooks are present in
+    /// hooks.json yet every session's hook exec fails silently. Empty when nothing needs repair.
+    public static func missingBinaryPaths(projectPath: String? = nil) -> [String] {
+        installedBinaryPaths(projectPath: projectPath).filter {
+            !FileManager.default.isExecutableFile(atPath: $0)
+        }
+    }
+
+    /// True when hooks are recorded but at least one points at a binary that's gone — a broken
+    /// install that `isInstalled` reports as healthy.
+    public static func hasMissingBinary(projectPath: String? = nil) -> Bool {
+        !missingBinaryPaths(projectPath: projectPath).isEmpty
+    }
+
     static func mergedEntry(into existing: Any?, commands: [String]) -> [[String: Any]] {
         var entries = (existing as? [[String: Any]]) ?? []
         entries.removeAll { entryHasMarker($0) }

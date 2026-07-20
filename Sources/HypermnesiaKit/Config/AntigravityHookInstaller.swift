@@ -74,6 +74,42 @@ public enum AntigravityHookInstaller {
         }
     }
 
+    /// Recorded hook binaries (the app-bundle CLI path baked into each handler command). Detects a
+    /// dead install after the app is moved/translocated: `isInstalled` stays true but the binary no
+    /// longer exists, so every Antigravity hook exec silently fails. The whole subtree under our
+    /// (current or pre-rename) hook key is ours, so every command in it is scanned.
+    public static func installedBinaryPaths(projectPath: String? = nil) -> [String] {
+        let root = read(settingsURL(projectPath: projectPath))
+        var paths: [String] = []
+        for key in [hookKey, legacyHookKey] {
+            guard let ours = root[key] as? [String: Any] else { continue }
+            for handlers in ours.values {
+                guard let array = handlers as? [[String: Any]] else { continue }
+                for entry in array {
+                    guard let command = entry["command"] as? String,
+                          let path = HookInstaller.recordedBinaryPath(inCommand: command),
+                          !paths.contains(path) else { continue }
+                    paths.append(path)
+                }
+            }
+        }
+        return paths
+    }
+
+    /// Recorded hook binaries that no longer exist / aren't executable — the hooks are present in
+    /// hooks.json yet every session's hook exec fails silently. Empty when nothing needs repair.
+    public static func missingBinaryPaths(projectPath: String? = nil) -> [String] {
+        installedBinaryPaths(projectPath: projectPath).filter {
+            !FileManager.default.isExecutableFile(atPath: $0)
+        }
+    }
+
+    /// True when hooks are recorded but at least one points at a binary that's gone — a broken
+    /// install that `isInstalled` reports as healthy.
+    public static func hasMissingBinary(projectPath: String? = nil) -> Bool {
+        !missingBinaryPaths(projectPath: projectPath).isEmpty
+    }
+
     // MARK: - Helpers
 
     private static func base(projectPath: String?) -> URL {
