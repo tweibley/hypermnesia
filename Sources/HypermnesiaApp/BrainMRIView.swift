@@ -67,9 +67,55 @@ private struct TimelineMarker: Identifiable {
     let tint: Color
 }
 
+/// Memoizes the deterministic brain layout + inferred edges so the O(24·n²) node relaxation runs
+/// only when the render-affecting inputs actually change — not on every `@State` mutation (hover,
+/// scrub, pulses) that re-evaluates the view body. Mirrors `GraphModel.rebuildIfNeeded`. Held in
+/// `@State` and deliberately non-observable: mutating it during body evaluation memoizes without
+/// triggering another render.
+private final class BrainLayoutCache {
+    private var signature: Int = 0
+    private var hasValue = false
+    private var nodes: [NeuralNode] = []
+    private var regions: [BrainRegion] = []
+    private var edges: [MemoryEdge] = []
+
+    func layout(in size: CGSize, memories: [MemoryNode])
+        -> (nodes: [NeuralNode], regions: [BrainRegion], edges: [MemoryEdge]) {
+        // Hash the render-affecting content, not just ids: an in-place mutation (revalidate
+        // changing decay level, a supersede/delete, edited related-files) must invalidate the
+        // cached layout and edges. Round the size so sub-pixel geometry jitter doesn't rebuild.
+        var hasher = Hasher()
+        hasher.combine(Int(size.width.rounded()))
+        hasher.combine(Int(size.height.rounded()))
+        for m in memories {
+            hasher.combine(m.id)
+            hasher.combine(m.type)
+            hasher.combine(m.decayLevel)
+            hasher.combine(m.status)
+            hasher.combine(m.confidence)
+            hasher.combine(m.supersededById)
+            hasher.combine(m.supersedesId)
+            hasher.combine(m.deletedAt)
+            hasher.combine(m.conversationId)
+            hasher.combine(m.data.relatedFiles)
+        }
+        let sig = hasher.finalize()
+        if hasValue, sig == signature { return (nodes, regions, edges) }
+        signature = sig
+        hasValue = true
+        let brain = BrainMRIView.layoutBrain(in: size, memories: memories)
+        nodes = brain.nodes
+        regions = brain.regions
+        edges = GraphBuilder.inferEdges(memories)
+        return (nodes, regions, edges)
+    }
+}
+
 struct BrainMRIView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var layoutCache = BrainLayoutCache()
 
     @State private var isOccluded = false
     @State private var mode: BrainStreamMode = .live
@@ -95,8 +141,8 @@ struct BrainMRIView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let brain = Self.layoutBrain(in: geo.size, memories: model.memories)
-            let edges = GraphBuilder.inferEdges(model.memories)
+            let brain = layoutCache.layout(in: geo.size, memories: model.memories)
+            let edges = brain.edges
             let renderPaused = mode == .paused || isOccluded
             VStack(spacing: 0) {
                 header

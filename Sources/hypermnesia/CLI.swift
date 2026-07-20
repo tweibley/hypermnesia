@@ -149,18 +149,36 @@ struct MCP: AsyncParsableCommand {
         abstract: "Run an MCP server exposing memory recall/ask/remember to any MCP client."
     )
 
+    /// Serializes stdout writes so concurrently-handled requests never interleave their JSON-RPC
+    /// lines on the wire. JSON-RPC ids let responses come back out of order, so this is safe.
+    private actor Emitter {
+        func emit(_ out: Data) {
+            FileHandle.standardOutput.write(out)
+            FileHandle.standardOutput.write(Data([0x0A]))   // newline delimiter
+        }
+    }
+
     func run() async throws {
         setvbuf(stdout, nil, _IONBF, 0)   // unbuffered: every response flushes immediately
         let handler = MCPHandler(store: try MemoryStore())
-        while let line = readLine(strippingNewline: true) {
-            guard let data = line.data(using: .utf8), !data.isEmpty,
-                  let message = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            else { continue }
-            guard let response = await handler.handle(message),
-                  let out = try? JSONSerialization.data(withJSONObject: response)
-            else { continue }
-            FileHandle.standardOutput.write(out)
-            FileHandle.standardOutput.write(Data([0x0A]))   // newline delimiter
+        let emitter = Emitter()
+        // Handle each request in its own task so a slow call (e.g. `ask`, which can spend up to
+        // ~120s in a `claude -p` subprocess) doesn't head-of-line block every other tool call.
+        // The read loop keeps draining stdin while in-flight requests run; the task group awaits
+        // all handlers before returning when stdin closes. GRDB's DatabaseQueue serializes the
+        // underlying store access, so concurrent `handle` calls are safe.
+        await withTaskGroup(of: Void.self) { group in
+            while let line = readLine(strippingNewline: true) {
+                group.addTask {
+                    guard let data = line.data(using: .utf8), !data.isEmpty,
+                          let message = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                    else { return }
+                    guard let response = await handler.handle(message),
+                          let out = try? JSONSerialization.data(withJSONObject: response)
+                    else { return }
+                    await emitter.emit(out)
+                }
+            }
         }
     }
 }
@@ -1079,6 +1097,17 @@ struct Backfill: AsyncParsableCommand {
 
     @Flag(name: .long, help: "Store memories as confirmed instead of drafts.")
     var confirm = false
+
+    func validate() throws {
+        // --all and --project are mutually exclusive: --all replays every project's transcripts
+        // (one classifier call per session, machine-wide), so silently ignoring an explicit
+        // --project would be an expensive, surprising footgun.
+        if all && project != nil {
+            throw ValidationError(
+                "Pass --project or --all, not both: --all backfills every project with transcripts; "
+                + "drop --all to backfill just this repo, or drop --project to run the machine-wide backfill.")
+        }
+    }
 
     func run() async throws {
         try validateClassifierFlag(classifier)

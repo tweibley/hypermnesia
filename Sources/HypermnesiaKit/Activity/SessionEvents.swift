@@ -259,14 +259,20 @@ public enum SessionEventFeed {
     /// Pop cards: sessions that finished or need the user. A newer `working` event swallows the
     /// session's card — the moment an agent resumes (e.g. its permission prompt was answered in
     /// the terminal), a stale "needs your input" card disappears.
+    /// The pop kinds a card can carry. `attention` and `finished` are the only kinds that ever
+    /// pop; both are allowed by default.
+    public static let poppableKinds: Set<SessionEvent.Kind> = [.attention, .finished]
+
     public static func cards(
         events: [SessionEvent],
         dismissedEventIds: Set<String> = [],
+        allowedKinds: Set<SessionEvent.Kind> = poppableKinds,
         now: Date = Date()
     ) -> [Card] {
         var cards: [Card] = []
         for event in latestPerSession(events) {
             guard event.kind != .ended, event.kind != .working,
+                  allowedKinds.contains(event.kind),
                   !dismissedEventIds.contains(event.id) else { continue }
             let age = now.timeIntervalSince(event.timestamp)
             let ttl = event.kind == .attention ? attentionTTL : finishedTTL

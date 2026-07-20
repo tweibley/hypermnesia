@@ -222,6 +222,12 @@ private struct NotchCardRow: View {
     }
 
     private var subtitle: String {
+        // The Dream Journal chip rides the `.finished` pipeline with a synthetic "hypermnesia"
+        // client, but clicking it opens the journal (see NotchStatusController.activate) rather
+        // than jumping back to a host session — so it needs its own branded subtitle.
+        if event.client == "hypermnesia" {
+            return "Memory Dreams — click to open the journal"
+        }
         switch event.kind {
         case .attention:
             return event.message ?? "Waiting for your input"
@@ -258,7 +264,7 @@ private func clientDisplayName(_ raw: String) -> String {
     case .claude: "Claude Code"
     case .cursor: "Cursor"
     case .antigravity: "Antigravity"
-    case nil: raw
+    case nil: raw.prefix(1).uppercased() + raw.dropFirst()   // capitalize an unrecognized client token
     }
 }
 

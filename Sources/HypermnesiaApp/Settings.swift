@@ -1083,11 +1083,19 @@ private struct StorageSettings: View {
             .padding(6)
         }
         .task {
-            if let store = try? MemoryStore() {
+            // Counting must not run on the main actor: opening a second DB connection and
+            // aggregating per project would freeze the Settings window. Use COUNT(*) via
+            // `counts(projectId:)` rather than materializing (and capping) memory rows.
+            let counts = await Task.detached { () -> (projects: Int, memories: Int) in
+                guard let store = try? MemoryStore() else { return (0, 0) }
                 let projects = (try? store.projects()) ?? []
-                projectCount = projects.count
-                memoryCount = projects.reduce(0) { $0 + ((try? store.nodes(projectId: $1, status: nil, limit: 5000).count) ?? 0) }
-            }
+                let memories = projects.reduce(0) { total, projectId in
+                    total + ((try? store.counts(projectId: projectId)) ?? [:]).values.reduce(0, +)
+                }
+                return (projects.count, memories)
+            }.value
+            projectCount = counts.projects
+            memoryCount = counts.memories
         }
     }
 

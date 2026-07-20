@@ -163,10 +163,27 @@ public enum Momentum {
             flat = String(flat[..<arrow.lowerBound]).trimmingCharacters(in: .whitespaces)
         }
         guard flat.hasSuffix("?") else { return nil }
-        let sentences = flat.split(whereSeparator: { $0 == "." || $0 == "!" || $0 == "?" })
-        guard let last = sentences.last else { return nil }
-        let question = last.trimmingCharacters(in: .whitespaces) + "?"
-        return question.count >= 8 ? question : nil
+        // Find the start of the final sentence: the character after the last sentence
+        // terminator ('.', '!', '?') that is *followed by whitespace*. A bare dot inside a
+        // filename or version ("settings.json", "v2.3") is not a boundary, so it no longer
+        // truncates the question into a garbled fragment ("json file?", "3 first?").
+        let chars = Array(flat)
+        var start = 0
+        for i in chars.indices.dropLast() where chars[i] == "." || chars[i] == "!" || chars[i] == "?" {
+            if chars[i + 1].isWhitespace { start = i + 1 }
+        }
+        let question = String(chars[start...]).trimmingCharacters(in: .whitespaces)
+        guard question.count >= 8 else { return nil }
+        // Guard against a mid-token split: a real question opens with a capital letter or a
+        // common interrogative. Anything else means the boundary landed inside a token, so
+        // drop the question rather than inject a meaningless fragment.
+        let firstWord = question.split(separator: " ").first.map { $0.lowercased() } ?? ""
+        let interrogatives: Set<String> = [
+            "should", "want", "do", "does", "did", "can", "could", "would", "will",
+            "which", "what", "why", "how", "is", "are", "was", "were", "shall", "may", "any",
+        ]
+        guard question.first?.isUppercase == true || interrogatives.contains(firstWord) else { return nil }
+        return question
     }
 
     static func relativeAge(from: Date, to: Date) -> String {
