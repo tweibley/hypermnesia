@@ -147,8 +147,15 @@ public enum SessionIngestor {
                 )
             )
         }
+        // Deterministic codeRefs from the same event slice the classifier saw (cursor-respecting).
+        // Runs even when classification produced nothing — edits are observed facts, not inferences.
+        let eventSlice = cursor > 0 ? Array(parsedEvents[cursor...]) : parsedEvents
         let config = AppConfigStore.loadBestEffort()
-        let fresh = reconcile(nodes, projectId: projectId, store: store,
+        let codeRefs = codeRefNodes(
+            from: eventSlice, projectId: projectId, sessionId: sessionId,
+            createdAt: when, commitSha: commitSha, branch: convo.gitBranch, config: config
+        )
+        let fresh = reconcile(nodes + codeRefs, projectId: projectId, store: store,
                               autoConfirm: config.autoConfirmAfterSightings,
                               confirmConfident: config.autoConfirmConfidentCaptures,
                               observationAt: when)
@@ -253,7 +260,11 @@ public enum SessionIngestor {
             ))
         }
         let config = AppConfigStore.loadBestEffort()
-        let fresh = reconcile(nodes, projectId: projectId, store: store,
+        let codeRefs = codeRefNodes(
+            from: newEvents, projectId: projectId, sessionId: sessionId,
+            createdAt: when, commitSha: commitSha, branch: convo.gitBranch, config: config
+        )
+        let fresh = reconcile(nodes + codeRefs, projectId: projectId, store: store,
                               autoConfirm: config.autoConfirmAfterSightings,
                               confirmConfident: config.autoConfirmConfidentCaptures,
                               observationAt: observationAt)
@@ -425,7 +436,9 @@ public enum SessionIngestor {
         let drafts = (try? store.allNodes(projectId: projectId, status: .draft)) ?? []
         var confirmed = 0
         for draft in drafts {
-            guard draft.conversationId != nil,
+            // CodeRefs confirm via sighting accrual only — never the confident-capture floor.
+            guard draft.type != .codeRef,
+                  draft.conversationId != nil,
                   draft.supersedesId == nil,
                   !draft.isSuperseded, !draft.isDeleted,
                   DecayEngine.decayed(draft).confidence >= confidentCaptureFloor else { continue }
@@ -443,6 +456,31 @@ public enum SessionIngestor {
     /// rejected, or the session edited code. Pure, for testability.
     static func shouldRetryExtraction(producedNothing: Bool, firstPassWasNonEmpty: Bool, editHeavy: Bool) -> Bool {
         producedNothing && (firstPassWasNonEmpty || editHeavy)
+    }
+
+    /// Deterministic codeRefs from edit tools in a transcript slice. Empty when the Capture
+    /// setting (or its env override) is off.
+    /// Always drafts — even `backfill --confirm` must not confirm a first-sight codeRef; they are
+    /// elevated by sighting accrual (or a human) only.
+    static func codeRefNodes(
+        from events: [TranscriptEvent],
+        projectId: String,
+        sessionId: String?,
+        createdAt: Date,
+        commitSha: String?,
+        branch: String?,
+        config: AppConfig
+    ) -> [MemoryNode] {
+        guard CodeRefExtractor.isEnabled(config: config) else { return [] }
+        return CodeRefExtractor.extract(
+            from: events,
+            projectId: projectId,
+            sessionId: sessionId,
+            createdAt: createdAt,
+            commitSha: commitSha,
+            branch: branch,
+            projectRoot: CodeRefExtractor.resolveRoot(projectRoot: nil, projectId: projectId, events: events)
+        )
     }
 
     /// Run every classifier output through `CaptureValidator`:
@@ -501,10 +539,12 @@ public enum SessionIngestor {
                     // Revisions ALWAYS stay drafts: confirming one retires a memory a human
                     // (or an earlier auto-confirm) already accepted — that call needs a human.
                     node.supersedesId = conflicting.id
-                } else if confirmConfident, node.status == .draft,
+                } else if confirmConfident, node.type != .codeRef, node.status == .draft,
                           node.confidence >= Self.confidentCaptureFloor {
                     // Human-in-the-loop only as needed: a clean, fresh, high-confidence capture
                     // goes live immediately instead of waiting in the inbox.
+                    // CodeRefs are observed facts with high confidence but must accrue sightings
+                    // before auto-confirm — a one-off edit stays a draft the user can ignore.
                     node.status = .confirmed
                 }
                 fresh.append(node)
@@ -517,6 +557,17 @@ public enum SessionIngestor {
             existing.timesSighted += 1                 // explicit: a repeat *sighting*, not an application
             existing.lastValidatedAt = observationAt
             existing.updatedAt = observationAt
+            // CodeRef re-sightings refresh provenance + latest snippet (still one node per path).
+            if node.type == .codeRef {
+                if let sha = node.commitSha { existing.commitSha = sha }
+                if let branch = node.branch { existing.branch = branch }
+                if case .codeRef(let incoming) = node.data,
+                   case .codeRef(var stored) = existing.data,
+                   let snippet = incoming.snippet, !snippet.isEmpty {
+                    stored.snippet = snippet
+                    existing.data = .codeRef(stored)
+                }
+            }
             // Deliberately do NOT reset confidence — that would silently undo an audit penalty. A
             // repeat sighting auto-confirms a draft after `autoConfirm` reinforcements.
             if existing.status == .draft, autoConfirm > 0, existing.timesApplied >= autoConfirm {

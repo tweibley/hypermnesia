@@ -10,6 +10,7 @@ struct GraphTests {
         case .decision: .decision(.init(chosen: "x", relatedFiles: files))
         case .concern: .concern(.init(issue: "i", severity: "low", relatedFiles: files))
         case .intent: .intent(.init(goal: "g", relatedFiles: files))
+        case .codeRef: .codeRef(.init(filePath: files.first ?? "x.swift"))
         default: .convention(.init(rule: "r", relatedFiles: files))
         }
         return MemoryNode(id: id, projectId: "p", type: type, title: id, summary: "s", data: data,
@@ -45,5 +46,25 @@ struct GraphTests {
             node("c", .fact, conversation: "s1"),
         ]).filter { $0.relationship == .relatedTo }
         #expect(edges.count == 2)   // a-b, b-c (chain), not 3 (clique)
+    }
+
+    @Test("shared-file edges involving codeRefs are typed")
+    func codeRefEdges() {
+        let edges = GraphBuilder.inferEdges([
+            node("i", .intent, files: ["Sources/Foo.swift"]),
+            node("c", .concern, files: ["Sources/Foo.swift"]),
+            node("d", .decision, files: ["Sources/Foo.swift"]),
+            node("r", .codeRef, files: ["Sources/Foo.swift"]),
+        ])
+        #expect(edges.contains {
+            $0.source == "i" && $0.target == "r" && $0.relationship == .implementedBy
+        })
+        #expect(edges.contains {
+            $0.source == "c" && $0.target == "r" && $0.relationship == .affects
+        })
+        #expect(edges.contains {
+            ($0.source == "d" && $0.target == "r" || $0.source == "r" && $0.target == "d")
+                && $0.relationship == .relatedTo
+        })
     }
 }

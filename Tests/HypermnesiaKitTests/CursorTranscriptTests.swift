@@ -35,8 +35,13 @@ struct CursorTranscriptTests {
         #expect(assistant.role == .assistant)
         #expect(assistant.textBlocks.count == 1)
         #expect(assistant.toolUses.first?.label == "ApplyPatch(DB.swift)")
+        #expect(assistant.toolUses.first?.editedFilePath == "/Users/x/proj/Sources/DB.swift")
         // tool_use without an `id` still parses.
         #expect(assistant.toolUses.first?.id == nil)
+
+        let reads = events[2].toolUses
+        #expect(reads.first { $0.name == "ReadFile" }?.editedFilePath == nil)
+        #expect(reads.first { $0.name == "ApplyPatch" }?.editedFilePath == "/Users/x/proj/Sources/Schema.swift")
     }
 
     @Test("builder annotates Cursor tools and flags edit-heavy sessions via ApplyPatch")

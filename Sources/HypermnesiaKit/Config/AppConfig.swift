@@ -28,6 +28,10 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// and MCP `remember` writes always stay draft-gated regardless. Turn off for full review of
     /// every capture (see SECURITY.md for the trade-off).
     public var autoConfirmConfidentCaptures: Bool
+    /// Capture edited files as code-reference memories (one draft per file, confirmed by repeat
+    /// sightings). The `HYPERMNESIA_CODE_REFS` environment variable, when set, overrides this for
+    /// development runs.
+    public var captureCodeRefs: Bool
     /// Notch status: pop live session status (agent finished / needs you) below the Mac's notch,
     /// with one click back to the session. Master switch — also gates the hook-side event emission.
     public var notchEnabled: Bool
@@ -68,6 +72,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         notifyOnNewDrafts: Bool = false,
         injectMomentum: Bool = true,
         autoConfirmConfidentCaptures: Bool = true,
+        captureCodeRefs: Bool = false,
         notchEnabled: Bool = true,
         notchOnAgentFinish: Bool = true,
         notchOnNeedsAttention: Bool = true,
@@ -92,6 +97,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.notifyOnNewDrafts = notifyOnNewDrafts
         self.injectMomentum = injectMomentum
         self.autoConfirmConfidentCaptures = autoConfirmConfidentCaptures
+        self.captureCodeRefs = captureCodeRefs
         self.notchEnabled = notchEnabled
         self.notchOnAgentFinish = notchOnAgentFinish
         self.notchOnNeedsAttention = notchOnNeedsAttention
@@ -122,6 +128,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         injectMomentum = try c.decodeIfPresent(Bool.self, forKey: .injectMomentum) ?? d.injectMomentum
         autoConfirmConfidentCaptures = try c.decodeIfPresent(Bool.self, forKey: .autoConfirmConfidentCaptures)
             ?? d.autoConfirmConfidentCaptures
+        captureCodeRefs = try c.decodeIfPresent(Bool.self, forKey: .captureCodeRefs) ?? d.captureCodeRefs
         notchEnabled = try c.decodeIfPresent(Bool.self, forKey: .notchEnabled) ?? d.notchEnabled
         notchOnAgentFinish = try c.decodeIfPresent(Bool.self, forKey: .notchOnAgentFinish) ?? d.notchOnAgentFinish
         notchOnNeedsAttention = try c.decodeIfPresent(Bool.self, forKey: .notchOnNeedsAttention)

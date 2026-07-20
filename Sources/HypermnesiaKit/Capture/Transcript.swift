@@ -6,6 +6,24 @@ public struct ToolUse: Sendable, Hashable {
     public let name: String
     /// A short human label, e.g. `Edit(auth.swift)` or `Bash(npm test)`.
     public let label: String
+    /// Full path from an edit tool's input (absolute or as supplied). Nil for non-edit tools.
+    public let editedFilePath: String?
+    /// First ~200 chars of the edit's new content, when present. Nil for non-edit tools / missing.
+    public let editSnippet: String?
+
+    public init(
+        id: String?,
+        name: String,
+        label: String,
+        editedFilePath: String? = nil,
+        editSnippet: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.label = label
+        self.editedFilePath = editedFilePath
+        self.editSnippet = editSnippet
+    }
 }
 
 /// The result of a tool call.
@@ -97,8 +115,7 @@ public enum TranscriptParser {
                         if let t = block.text, !t.isEmpty { append(text: t, role: role, to: &texts, recovering: &recoveredTimestamp) }
                     case "tool_use":
                         let name = block.name ?? "tool"
-                        uses.append(ToolUse(id: block.id, name: name,
-                                            label: toolLabel(name: name, input: block.input)))
+                        uses.append(makeToolUse(id: block.id, name: name, input: block.input, dialect: .anthropic))
                     case "tool_result":
                         results.append(ToolResult(
                             toolUseID: block.toolUseID,
@@ -130,7 +147,21 @@ public enum TranscriptParser {
         return events
     }
 
-    // MARK: - Tool labels
+    // MARK: - Tool uses
+
+    /// Build a `ToolUse` with a compact display label plus, for edit tools, the full path/snippet.
+    static func makeToolUse(
+        id: String?, name: String, input: JSONValue?, dialect: EditToolSpec.Dialect
+    ) -> ToolUse {
+        let label = dialect == .antigravity
+            ? antigravityToolLabel(name: name, args: input)
+            : toolLabel(name: name, input: input)
+        let extracted = EditToolSpec.extract(toolName: name, input: input)
+        return ToolUse(
+            id: id, name: name, label: label,
+            editedFilePath: extracted.path, editSnippet: extracted.snippet
+        )
+    }
 
     /// Build a compact `Name(arg)` label from a tool's input.
     static func toolLabel(name: String, input: JSONValue?) -> String {
@@ -177,8 +208,7 @@ public enum TranscriptParser {
             var texts: [String] = []
             if let content = raw.content, !content.isEmpty { texts.append(content) }
             let uses = (raw.toolCalls ?? []).map { call in
-                let name = call.name ?? "tool"
-                return ToolUse(id: nil, name: name, label: antigravityToolLabel(name: name, args: call.args))
+                makeToolUse(id: nil, name: call.name ?? "tool", input: call.args, dialect: .antigravity)
             }
             return texts.isEmpty && uses.isEmpty ? nil : event(role: .assistant, texts: texts, uses: uses)
         case "ERROR_MESSAGE":

@@ -35,7 +35,15 @@ struct TranscriptTests {
         // thinking dropped; text kept; tool_use captured with a basename label
         #expect(assistant.textBlocks.count == 1)
         #expect(assistant.toolUses.first?.label == "Edit(DB.swift)")
+        // Full path + snippet retained for codeRef extraction (not just the display label).
+        #expect(assistant.toolUses.first?.editedFilePath == "/Users/x/proj/Sources/DB.swift")
+        #expect(assistant.toolUses.first?.editSnippet == "b")
         #expect(assistant.timestamp != nil)
+
+        // Non-edit tools leave path/snippet nil.
+        let bash = events.first { $0.toolUses.contains { $0.name == "Bash" } }
+        #expect(bash?.toolUses.first?.editedFilePath == nil)
+        #expect(bash?.toolUses.first?.editSnippet == nil)
     }
 
     @Test("builder condenses, drops thinking + sidechain, annotates tools, keeps error results")

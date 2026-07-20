@@ -32,14 +32,8 @@ public struct Conversation: Sendable {
     public var isEmpty: Bool { messages.isEmpty }
 
     /// Editing tool labels render as `→ Edit(file), Write(file)` lines (see `ConversationBuilder`).
-    /// Includes Cursor's edit tool (`ApplyPatch`) and Antigravity's (`write_to_file`,
-    /// `replace_file_content`) alongside Claude Code's, so `isEditHeavy` fires for any client.
-    /// (`ApplyPatch` may render with or without an arg, so match the bare name too. Antigravity's
-    /// `multi_replace_file_content` is covered by its `replace_file_content` substring — the `_`
-    /// before it passes the letter-boundary check — so it isn't listed separately, which would
-    /// double-count it.)
-    static let editToolMarkers = ["Edit(", "Write(", "MultiEdit(", "NotebookEdit(", "Update(",
-                                  "ApplyPatch", "write_to_file", "replace_file_content"]
+    /// Derived from `EditToolSpec` so edit-heavy detection stays aligned with path retention.
+    static var editToolMarkers: [String] { EditToolSpec.editToolMarkers }
     static let editHeavyThreshold = 2
 
     /// How many file-editing tool uses the (rendered) transcript contains.

@@ -65,8 +65,8 @@ struct HydrationTests {
         #expect(MemoryHydrator.context(store: try store(), projectId: "github.com/none/none") == nil)
     }
 
-    @Test("backlog/codeRef memories render (no header-only block)")
-    func backlogAndCodeRefRender() throws {
+    @Test("SessionStart excludes codeRefs from ranking but still renders backlog")
+    func sessionStartExcludesCodeRefs() throws {
         let s = try store()
         try s.upsert([
             node(.backlog, "Dark mode", .backlog(.init(idea: "add a dark theme", priority: "low"))),
@@ -74,7 +74,55 @@ struct HydrationTests {
         ])
         let ctx = try #require(MemoryHydrator.context(store: s, projectId: project))
         #expect(ctx.contains("add a dark theme"))
+        #expect(!ctx.contains("Sources/Router.swift"))
+        #expect(!ctx.contains("## Code references"))
+    }
+
+    @Test("query-relevant codeRefs appear in UserPromptSubmit context")
+    func queryIncludesMatchingCodeRefs() throws {
+        let s = try store()
+        try s.upsert([
+            node(.fact, "DB", .fact(.init(category: "stack", key: "db", value: "Postgres"))),
+            node(.codeRef, "Router", .codeRef(.init(filePath: "Sources/Router.swift", symbolName: "route"))),
+        ])
+        let ctx = try #require(MemoryHydrator.relevantContext(
+            store: s, projectId: project, query: "Router.swift"
+        ))
+        #expect(ctx.contains("## Code references"))
         #expect(ctx.contains("Sources/Router.swift"))
+    }
+
+    @Test("a bare symbol-ish mention (no extension) still surfaces the matching codeRef")
+    func stemQueryMatchesCodeRef() throws {
+        let s = try store()
+        try s.upsert([
+            node(.fact, "DB", .fact(.init(category: "stack", key: "db", value: "Postgres"))),
+            node(.codeRef, "Router", .codeRef(.init(filePath: "Sources/Router.swift"))),
+        ])
+        let ctx = try #require(MemoryHydrator.relevantContext(
+            store: s, projectId: project, query: "how does Router dispatch requests?"
+        ))
+        #expect(ctx.contains("Sources/Router.swift"))
+        // A short/generic prompt with no file mention must not drag codeRefs in.
+        let unrelated = MemoryHydrator.relevantContext(
+            store: s, projectId: project, query: "what database do we use?"
+        )
+        #expect(!(unrelated?.contains("Sources/Router.swift") ?? false))
+    }
+
+    @Test("linked codeRefs annotate primary memories without a bulk Code references section")
+    func annotatesLinkedCodeRefs() throws {
+        let s = try store()
+        try s.upsert([
+            node(.decision, "Auth", .decision(.init(
+                chosen: "JWT", relatedFiles: ["Sources/Auth.swift"]
+            ))),
+            node(.codeRef, "Auth.swift", .codeRef(.init(filePath: "Sources/Auth.swift"))),
+        ])
+        let ctx = try #require(MemoryHydrator.context(store: s, projectId: project))
+        #expect(ctx.contains("chose JWT"))
+        #expect(ctx.contains("→ Sources/Auth.swift"))
+        #expect(!ctx.contains("## Code references"))
     }
 
     @Test("an over-long memory field is truncated so injected context stays bounded")

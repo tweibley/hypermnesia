@@ -44,6 +44,11 @@ struct AntigravityTranscriptTests {
 
         let editor = events[3]
         #expect(editor.toolUses.map(\.label) == ["write_to_file(DB.swift)", "multi_replace_file_content(Schema.swift)"])
+        // Double-encoded AbsolutePath/TargetFile unwrapped to full paths for codeRef extraction.
+        #expect(editor.toolUses.map(\.editedFilePath) == [
+            "/Users/x/proj/Sources/DB.swift",
+            "/Users/x/proj/Sources/Schema.swift",
+        ])
 
         let final = events[4]
         #expect(final.role == .assistant)

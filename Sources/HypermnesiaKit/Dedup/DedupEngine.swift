@@ -49,7 +49,13 @@ public enum DedupEngine {
     private static func text(_ node: MemoryNode) -> String { node.title + " " + node.summary }
 
     /// Whether two memories are near-duplicates (threshold lowered when commits match).
+    /// CodeRefs match on exact `filePath` — Jaccard on titles would collide same basenames in
+    /// different directories (`Sources/Foo.swift` vs `Tests/Foo.swift`).
     public static func isDuplicate(_ a: MemoryNode, _ b: MemoryNode) -> Bool {
+        if a.type == .codeRef, b.type == .codeRef,
+           case .codeRef(let ad) = a.data, case .codeRef(let bd) = b.data {
+            return ad.filePath == bd.filePath
+        }
         let sameCommit = a.commitSha != nil && a.commitSha == b.commitSha
         let threshold = sameCommit ? sameCommitThreshold : baseThreshold
         return similarity(text(a), text(b)) >= threshold

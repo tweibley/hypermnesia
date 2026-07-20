@@ -25,9 +25,28 @@ public enum GraphBuilder {
         }
 
         // 2. Shared files — bounded fan-out, typed by the pair.
+        // Classifier memories may carry absolute paths while codeRefs are repo-relative; fold an
+        // absolute key onto the (longest) relative key it ends with so the two still group.
+        var relativeKeys: Set<String> = []
+        for node in nodes {
+            for file in node.data.relatedFiles {
+                let key = normalizeFileKey(file)
+                if !key.hasPrefix("/") { relativeKeys.insert(key) }
+            }
+        }
+        func canonicalFileKey(_ key: String) -> String {
+            guard key.hasPrefix("/") else { return key }
+            var best: String?
+            for rel in relativeKeys where key.hasSuffix("/" + rel) {
+                if best == nil || rel.count > best!.count { best = rel }
+            }
+            return best ?? key
+        }
         var byFile: [String: [MemoryNode]] = [:]
         for node in nodes {
-            for file in node.data.relatedFiles { byFile[file, default: []].append(node) }
+            for file in node.data.relatedFiles {
+                byFile[canonicalFileKey(normalizeFileKey(file)), default: []].append(node)
+            }
         }
         for group in byFile.values where group.count >= 2 {
             for i in group.indices {
@@ -44,7 +63,13 @@ public enum GraphBuilder {
                         let decision = a.type == .decision ? a : b
                         let intent = a.type == .decision ? b : a
                         add(decision.id, intent.id, .implements)
+                    } else if pair == Set([.intent, .codeRef]) {
+                        // an intent is implemented by the codeRef that shares its file.
+                        let intent = a.type == .intent ? a : b
+                        let codeRef = a.type == .intent ? b : a
+                        add(intent.id, codeRef.id, .implementedBy)
                     } else {
+                        // decision↔codeRef and other pairs stay related_to (no new edge types).
                         add(a.id, b.id, .relatedTo)
                     }
                 }
@@ -64,5 +89,13 @@ public enum GraphBuilder {
         }
 
         return Array(edges.values)
+    }
+
+    /// Normalize path keys so absolute/relative variants of the same file still group.
+    /// Case-sensitive; strips a leading `./` only.
+    static func normalizeFileKey(_ file: String) -> String {
+        var s = file.trimmingCharacters(in: .whitespacesAndNewlines)
+        while s.hasPrefix("./") { s = String(s.dropFirst(2)) }
+        return s
     }
 }

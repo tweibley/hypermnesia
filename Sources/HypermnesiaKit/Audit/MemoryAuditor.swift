@@ -26,11 +26,69 @@ public enum MemoryAuditor {
 
     // MARK: - Deterministic checks (no LLM)
 
+    /// Rewrite codeRef paths that moved via git rename since capture. Call before `audit` so a
+    /// renamed file is not incorrectly flagged missing. When another codeRef already lives at the
+    /// renamed path (edits under the new name created one), fold the stale node's sighting history
+    /// into it and soft-delete the stale node — the one-node-per-path invariant holds. Returns how
+    /// many nodes were updated (rewrites + merges).
+    @discardableResult
+    public static func repairCodeRefPaths(
+        store: MemoryStore, projectId: String, repoPath: String, status: MemoryStatus? = .confirmed
+    ) -> Int {
+        let nodes = ((try? store.allNodes(projectId: projectId, type: .codeRef, status: status)) ?? [])
+        // Collision lookup spans ALL codeRefs (any status) — a draft at the new path still collides.
+        let everyCodeRef = ((try? store.allNodes(projectId: projectId, type: .codeRef)) ?? [])
+        var idByPath: [String: String] = [:]
+        for ref in everyCodeRef {
+            if case .codeRef(let d) = ref.data { idByPath[d.filePath] = ref.id }
+        }
+        var repaired = 0
+        for node in nodes {
+            guard case .codeRef(let data) = node.data else { continue }
+            let absolute = absolutePath(data.filePath, repoPath: repoPath)
+            if FileManager.default.fileExists(atPath: absolute) { continue }
+            let relative = relativePath(data.filePath, repoPath: repoPath)
+            guard let renamed = findRenamedPath(repoPath: repoPath, from: node.commitSha, file: relative),
+                  FileManager.default.fileExists(atPath: absolutePath(renamed, repoPath: repoPath))
+            else { continue }
+            let now = Date()
+            if let survivorId = idByPath[renamed], survivorId != node.id,
+               var survivor = try? store.node(id: survivorId) {
+                survivor.timesApplied += node.timesApplied
+                survivor.timesSighted += node.timesSighted
+                survivor.lastValidatedAt = now
+                survivor.updatedAt = now
+                guard (try? store.upsert(survivor)) != nil else { continue }
+                try? store.softDeleteNode(id: node.id, at: now)
+                repaired += 1
+                continue
+            }
+            var updated = node
+            updated.data = .codeRef(.init(
+                filePath: renamed,
+                symbolName: data.symbolName,
+                range: data.range,
+                snippet: data.snippet
+            ))
+            updated.title = URL(fileURLWithPath: renamed).lastPathComponent
+            updated.summary = renamed
+            updated.lastValidatedAt = now
+            updated.updatedAt = now
+            guard (try? store.upsert(updated)) != nil else { continue }
+            idByPath[renamed] = node.id
+            repaired += 1
+        }
+        return repaired
+    }
+
     /// Cheap checks against the working tree at `repoPath`: related files that no longer exist, and
     /// files that changed between the memory's commit and HEAD.
     public static func audit(
         store: MemoryStore, projectId: String, repoPath: String, status: MemoryStatus? = .confirmed
     ) -> [AuditFinding] {
+        // Heal renamed codeRefs first so they don't emit spurious missing-file findings.
+        _ = repairCodeRefPaths(store: store, projectId: projectId, repoPath: repoPath, status: status)
+
         let nodes = (try? store.allNodes(projectId: projectId, status: status)) ?? []
         let head = ProjectIdentity.headSha(cwd: repoPath)
         var findings: [AuditFinding] = []
@@ -235,5 +293,39 @@ public enum MemoryAuditor {
     /// True iff `git diff --quiet from to -- file` reports a change (exit 1). Other exits → unknown.
     static func fileChanged(repoPath: String, from: String, to: String, file: String) -> Bool {
         Shell.run("git", ["-C", repoPath, "diff", "--quiet", from, to, "--", file], cwd: repoPath).status == 1
+    }
+
+    /// Follow renames from `commitSha`→HEAD (or recent history) and return the current path for
+    /// `file`, if a rename chain is found. Nil when unchanged / undetectable.
+    static func findRenamedPath(repoPath: String, from commitSha: String?, file: String) -> String? {
+        var args = ["-C", repoPath, "log", "--find-renames", "--diff-filter=R",
+                    "--name-status", "--format="]
+        if let commitSha, !commitSha.isEmpty {
+            args.append("\(commitSha)..HEAD")
+        } else {
+            args.append(contentsOf: ["-n", "50"])
+        }
+        let result = Shell.run("git", args, cwd: repoPath)
+        let output = result.stdout
+        guard !output.isEmpty else { return nil }
+
+        // Apply rename pairs oldest→newest so a→b then b→c resolves to c.
+        var pairs: [(String, String)] = []
+        for line in output.split(separator: "\n") {
+            let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 3, parts[0].hasPrefix("R") else { continue }
+            pairs.append((parts[1], parts[2]))
+        }
+        guard !pairs.isEmpty else { return nil }
+
+        var current = file
+        var moved = false
+        for (old, new) in pairs.reversed() {
+            if old == current {
+                current = new
+                moved = true
+            }
+        }
+        return moved && current != file ? current : nil
     }
 }

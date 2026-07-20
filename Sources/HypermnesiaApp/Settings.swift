@@ -830,6 +830,12 @@ private struct CaptureSettings: View {
                 Text("A draft seen again in this many later sessions is confirmed automatically (0 = never).")
                     .font(.caption2).foregroundStyle(.tertiary)
                 Divider()
+                Toggle(isOn: $model.config.captureCodeRefs) {
+                    Text("Track edited files as code references")
+                    Text("One draft per file edited in Claude Code, Cursor, or Antigravity sessions — confirmed by repeat sightings, surfaced when a prompt mentions the file. No LLM involved; lockfiles, secrets, and anything .gitignore'd are skipped.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Divider()
                 Toggle(isOn: $model.config.notifyOnNewDrafts) {
                     Text("Notify when new drafts arrive")
                     Text("One macOS notification per capture pass — the menu-bar badge stays on either way.")
