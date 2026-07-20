@@ -24,7 +24,9 @@ versions follow [SemVer](https://semver.org).
   estimated cost recorded in the journal — and no dream is better than a bad dream:
   nights that don't clear the quality gate are logged as quiet, never padded. Manual
   pass: `hypermnesia dream [--project P] [--days N]`; the first dream runs right after
-  "Process previous sessions", priced into its consent dialog.
+  "Process previous sessions", priced into its consent dialog. Inspired by
+  [gemini-dreams](https://github.com/jswortz/gemini-dreams) by
+  [@jswortz](https://github.com/jswortz) — thank you.
 
 ### Deprecated
 

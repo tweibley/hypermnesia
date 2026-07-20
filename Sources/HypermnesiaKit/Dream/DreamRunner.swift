@@ -1,5 +1,9 @@
 import Foundation
 
+// The dream concept — nightly reflection over agent logs yielding epiphanies and drafted skills —
+// is inspired by jswortz's gemini-dreams (https://github.com/jswortz/gemini-dreams). This
+// implementation wraps that idea in evidence validation, consent, and a reviewable lifecycle.
+
 // MARK: - Inputs
 
 /// One condensed session fed into a dream (already truncated to budget by `DreamSessions`).

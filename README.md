@@ -273,6 +273,14 @@ rm -rf Hypermnesia.app               # wherever you put the app
 Your data stays until you delete it (export first with `hypermnesia export --all` if you want a
 backup): `rm -rf ~/Library/Application\ Support/Hypermnesia/`.
 
+## Acknowledgments
+
+- **Memory Dreams** — the overnight reflect-over-your-sessions loop — was inspired by
+  [gemini-dreams](https://github.com/jswortz/gemini-dreams) by
+  [@jswortz](https://github.com/jswortz): nightly epiphanies mined from agent logs, and skills
+  drafted from repeated friction. Hypermnesia's take adds the evidence gates, consent, and
+  install lifecycle around that idea.
+
 ## License
 
 [MIT](LICENSE). Bundled dependencies are covered in
