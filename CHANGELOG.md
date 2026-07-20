@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-20
+
 ### Added
 
 - **Memory Dreams**: after your Mac wakes and goes idle, Hypermnesia consolidates recent
