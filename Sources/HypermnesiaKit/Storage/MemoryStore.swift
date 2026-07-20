@@ -360,6 +360,35 @@ public final class MemoryStore: Sendable {
         return removedCount
     }
 
+    /// Drop terminal "transcript missing" failures for sessions that never had anything to capture.
+    /// A session whose transcript still doesn't exist on disk, whose live cursor never advanced, and
+    /// whose queued path is not a managed snapshot (a snapshot proves a transcript once existed) is
+    /// an *empty* session — a window opened and closed without a single prompt. There is nothing to
+    /// recover, so leaving these as red "failed" rows only alarms the user. Runs as drain housekeeping.
+    @discardableResult
+    public func sweepEmptySessionFailures(
+        supportDirectory: URL = StoreLocation.supportDirectory,
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) throws -> Int {
+        let candidates = try dbQueue.read { db in
+            try CaptureQueueItem
+                .filter(Column("status") == CaptureStatus.error.rawValue)
+                .filter(Column("lastError").like("transcript missing%"))
+                .fetchAll(db)
+        }
+        var empty: [String] = []
+        for item in candidates {
+            guard !TranscriptSnapshotStore.isManaged(item.transcriptPath, in: supportDirectory),
+                  !fileExists(item.transcriptPath),
+                  try cursor(sessionId: item.sessionId) == 0 else { continue }
+            empty.append(item.id)
+        }
+        guard !empty.isEmpty else { return 0 }
+        return try dbQueue.write { db in
+            try CaptureQueueItem.filter(empty.contains(Column("id"))).deleteAll(db)
+        }
+    }
+
     /// True when another queue row (not `excludingId`) still points at `path` — used before
     /// deleting a managed snapshot after a drain completes.
     public func isTranscriptPathReferenced(_ path: String, excludingId: String) throws -> Bool {

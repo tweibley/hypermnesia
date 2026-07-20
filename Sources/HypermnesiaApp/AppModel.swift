@@ -758,10 +758,12 @@ final class AppModel {
                 Notifier.notifyNewDrafts(report.added)
             }
         }
-        if report.failures > 0 {
+        if report.classifierFailures > 0 {
             // Failed rows retry on later drains (bounded by maxAttempts), so this resolves itself
             // when transient — but a misconfigured classifier would otherwise fail silently forever.
-            lastActionError = "\(report.failures) queued session(s) failed to classify — check Settings → Classifier."
+            lastActionError = "\(report.classifierFailures) queued session(s) failed to classify — check Settings → Classifier."
+        } else if report.failures > 0 {
+            lastActionError = "\(report.failures) queued session(s) could not be captured — see the capture queue for details."
         }
     }
 
@@ -898,8 +900,10 @@ final class AppModel {
             self.isProcessing = false
             if report.failures > 0 {
                 // Truthful over tidy: "Up to date." after a classifier failure reads as success.
-                self.processingStatus = "Added \(report.added) memories; \(report.failures) session(s) failed to classify."
-                self.lastActionError = "\(report.failures) session(s) failed to classify — check Settings → Classifier."
+                self.processingStatus = "Added \(report.added) memories; \(report.failures) session(s) could not be captured."
+                self.lastActionError = report.classifierFailures > 0
+                    ? "\(report.classifierFailures) session(s) failed to classify — check Settings → Classifier."
+                    : "\(report.failures) session(s) could not be captured — see the capture queue for details."
             } else {
                 self.processingStatus = report.added > 0 ? "Added \(report.added) memories." : "Done."
             }

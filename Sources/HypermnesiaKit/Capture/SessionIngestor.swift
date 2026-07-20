@@ -245,7 +245,10 @@ public enum SessionIngestor {
     public struct DrainReport: Sendable, Equatable {
         public let added: Int
         public let failures: Int
-        public static let idle = DrainReport(added: 0, failures: 0)
+        /// How many of `failures` were classifier errors (vs missing/unreadable transcripts or
+        /// persistence failures) — a "check your classifier settings" hint is only apt for these.
+        public let classifierFailures: Int
+        public static let idle = DrainReport(added: 0, failures: 0, classifierFailures: 0)
     }
 
     /// Drain the capture queue: classify each pending session (incrementally) into memories.
@@ -270,9 +273,15 @@ public enum SessionIngestor {
         // Housekeeping while we're the sole drainer: drop long-finished queue rows so the table
         // doesn't grow one row per session forever.
         _ = try? store.pruneFinishedCaptures()
+        // Empty sessions (a window opened and closed with no prompt, so no transcript was ever
+        // written) that slipped into the queue before the enqueue-time guard existed — or via an
+        // older hook binary — end up as unfixable "transcript missing" errors. Sweep them so the
+        // health banner only ever shows failures a user could act on.
+        _ = try? store.sweepEmptySessionFailures()
 
         var total = 0
         var failures = 0
+        var classifierFailures = 0
         var touchedProjects = Set<String>()
         let threshold = AppConfigStore.loadBestEffort().captureThreshold
         let pending = (try? store.pendingCaptures(limit: max(0, limit))) ?? []
@@ -325,6 +334,7 @@ public enum SessionIngestor {
                 }
             case .failed(let reason, let terminal):
                 failures += 1
+                if reason == "classification failed" { classifierFailures += 1 }
                 // Missing transcripts (and other terminal failures) won't recover on retry — mark
                 // them error immediately. Transient classifier failures stay pending until the attempt
                 // budget is exhausted.
@@ -352,7 +362,7 @@ public enum SessionIngestor {
         for projectId in touchedProjects {
             ConflictEngine.sweep(store: store, projectId: projectId)
         }
-        return DrainReport(added: total, failures: failures)
+        return DrainReport(added: total, failures: failures, classifierFailures: classifierFailures)
     }
 
     /// Drop a managed snapshot only when no other queue row still needs it, and only when a

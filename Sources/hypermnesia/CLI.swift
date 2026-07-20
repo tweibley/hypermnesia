@@ -514,6 +514,21 @@ struct Capture: AsyncParsableCommand {
             return
         }
 
+        // An empty session: Claude Code only writes `<sessionId>.jsonl` once the first prompt is
+        // sent, so a session ending with no transcript on disk (and no cursor from an earlier
+        // live slice) was opened and closed without the user ever saying anything — e.g. the
+        // desktop app restoring a tab. There is nothing to capture and no retry can ever help;
+        // enqueueing would only surface a confusing "failed" row in the queue health banner.
+        // Scoped to Claude Code: Cursor's transcript lives at a computed export path whose absence
+        // can also mean transcript export is disabled, which deserves the retry + note below.
+        if client == .claude,
+           !FileManager.default.fileExists(atPath: transcript),
+           ((try? store.cursor(sessionId: sessionId)) ?? 0) == 0 {
+            HookIO.debug("capture (claude) \(ctx.event): \(sessionId.prefix(8)) has no transcript — "
+                + "empty session, skipping")
+            return
+        }
+
         // The host may delete its transcript as soon as this hook returns. Snapshot it before
         // enqueueing so the out-of-band drain never races a host-owned temporary file. If the
         // snapshot fails (disk full, source already gone), still enqueue the host path — a later

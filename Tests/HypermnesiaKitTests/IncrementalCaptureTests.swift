@@ -320,6 +320,40 @@ struct IncrementalCaptureTests {
         #expect(try store.pendingCaptures(limit: 10).count == 1)   // the pending row survives
     }
 
+    @Test("sweepEmptySessionFailures drops only empty-session missing-transcript errors")
+    func sweepEmptySessionFailures() throws {
+        let store = try MemoryStore(location: .inMemory)
+        func failedRow(sessionId: String, path: String, error: String) throws {
+            try store.enqueueOrUpdate(sessionId: sessionId, projectId: "p", transcriptPath: path,
+                                      cwd: "/c", gitSha: nil, gitBranch: nil, isFinal: true)
+            let id = try #require(try store.pendingCaptures(limit: 10).first).id
+            #expect(try store.beginProcessing(id: id))
+            #expect(try store.finishProcessing(id: id, status: .error, lastError: error))
+        }
+
+        // Empty session: host path never existed, cursor never advanced → swept.
+        try failedRow(sessionId: "empty", path: "/gone/empty.jsonl", error: "transcript missing 5×")
+        // A session that captured a live slice earlier had real content → kept.
+        try failedRow(sessionId: "had-content", path: "/gone/had-content.jsonl", error: "transcript missing 5×")
+        try store.setCursor(sessionId: "had-content", projectId: "p", count: 4)
+        // A managed snapshot proves a transcript once existed (real data loss) → kept.
+        try failedRow(sessionId: "snap", path: "/support/capture-transcripts/abc.jsonl",
+                      error: "transcript missing")
+        // A different failure kind is not this sweep's business → kept.
+        try failedRow(sessionId: "classify", path: "/gone/classify.jsonl", error: "classification failed 5×")
+        // The transcript reappeared on disk → kept for a real retry via re-enqueue.
+        try failedRow(sessionId: "reappeared", path: "/back/reappeared.jsonl", error: "transcript missing 5×")
+
+        #expect(try store.sweepEmptySessionFailures(
+            fileExists: { $0 == "/back/reappeared.jsonl" }) == 1)
+        #expect(try store.captureQueueHealth().terminalErrors == 4)
+
+        // With the file gone again, "reappeared" is now the only sweepable row — proving the
+        // first pass removed exactly the empty session and every guard held.
+        #expect(try store.sweepEmptySessionFailures(fileExists: { _ in false }) == 1)
+        #expect(try store.captureQueueHealth().terminalErrors == 3)
+    }
+
     @Test("a re-enqueue during processing is not clobbered by the drain's completion (compare-and-set)")
     func reenqueueDuringProcessingSurvives() throws {
         let store = try MemoryStore(location: .inMemory)
