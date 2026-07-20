@@ -5,6 +5,51 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-07-20
+
+Bug-fix release: 38 user-facing issues surfaced by an adversarial multi-agent audit, plus a
+cross-client hook-health follow-up. No schema or config migrations; 49 new regression tests
+(310 → 359).
+
+### Fixed
+
+- **Capture no longer silently dies when the app moves.** Hooks record an absolute path to the
+  bundled CLI, so moving or translocating Hypermnesia.app left capture and hydration dead while
+  everything still reported "installed ✓". Install state now verifies the recorded binary exists
+  and is executable; `doctor` and Settings report the broken install and offer a reinstall that
+  re-points the hooks — for Claude Code, Cursor, and Antigravity.
+- **Obsolete memories no longer resurface.** The retroactive supersede sweep rewrote a stale
+  in-memory copy of a middle-generation memory, un-retiring it so both it and its replacement
+  were injected into every session. It now writes from live state and skips already-retired nodes.
+- **Dream skills are correctly scoped per project.** Install / update / uninstall / usage keyed on
+  slug alone, so installing a same-named skill into a second project rewrote the first project's
+  copy and Uninstall could delete another project's files. All lookups now key on
+  (slug, scope, project); update-with-diff honors the scope you picked; Uninstall targets this
+  project's copy.
+- **Recall no longer returns nothing for ordinary questions.** The keyword fallback required every
+  query token to match (FTS5 implicit AND); it now uses OR ranking.
+- **Capture reliability:** a transient transcript read error no longer permanently seals a session;
+  `backfill` reports per-session failures instead of an indistinguishable "0 memories"; sessions
+  with a large early attachment are read fully; a re-observed rule is no longer absorbed into a
+  superseded memory.
+- **MCP:** `remember` reinforces an existing memory instead of piling up duplicate drafts; `ask`
+  surfaces backend failures as errors; the stdio loop handles requests concurrently so a slow `ask`
+  no longer blocks other tool calls.
+- **Dreams:** "Dream now" is gated against the nightly pass (no double-billed, half-lost runs);
+  re-running a dream preserves installed-skill state and report-back links; user-scope skill usage
+  is counted across all projects.
+- **App:** the memory list is no longer capped at 500 rows; login-shell probes moved off the
+  launch/main thread with timeouts (no beachball at startup or when registering the MCP server);
+  draft-review keyboard shortcuts advance to the next draft; a notch card for a tmux/ssh session no
+  longer no-ops-and-dismisses; "agent finished" pops aren't starved by disabled attention pops; the
+  Brain MRI and Storage view no longer stutter or block the UI.
+- **"Remove all memories"** now also clears the Dream Journal; the confidence override rate no
+  longer reads over 100%.
+- **CLI / site:** `doctor` checks the actually-configured classifier; `backfill --project … --all`
+  is rejected as contradictory; config writes preserve symlinked settings files; the release build
+  fails rather than ship without its Sparkle appcast; the site privacy copy discloses analytics
+  accurately.
+
 ## [0.2.0] — 2026-07-20
 
 ### Added
