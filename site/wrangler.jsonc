@@ -2,6 +2,8 @@
   // Static site for hypermnesia.app, served via Cloudflare Workers static assets.
   // Deploy: `wrangler deploy` from this directory (after `wrangler login`).
   "name": "hypermnesia-site",
+  // Pinned so CI deploys (release.yml deploy-site job, API-token auth) need no account picker.
+  "account_id": "b58cc92bdc8951aea8c622da57a02b40",
   "compatibility_date": "2026-07-17",
   "assets": {
     "directory": "./public"

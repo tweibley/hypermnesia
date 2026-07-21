@@ -11,6 +11,9 @@
 #                             `generate_keys -x key.txt` (Sparkle's tool), `gh secret set
 #                             SPARKLE_ED_PRIVATE_KEY < key.txt`, then delete key.txt. The
 #                             matching public key is committed at packaging/sparkle-public-ed-key.txt.
+#   CLOUDFLARE_API_TOKEN      Cloudflare API token for the deploy-site job (dash.cloudflare.com →
+#                             My Profile → API Tokens → "Edit Cloudflare Workers" template,
+#                             scoped to the account in site/wrangler.jsonc).
 #
 # Then: `git tag v0.1.0 && git push origin v0.1.0`.
 name: release
@@ -135,3 +138,21 @@ jobs:
           # link points here); generate_release_notes appends the auto "Full Changelog" compare link.
           body_path: dist/release-notes.md
           generate_release_notes: true
+
+  # Redeploy the marketing site with the tagged version injected from VERSION, so the site can
+  # never lag the release again (it sat on v0.2.0 through two releases because the bump + manual
+  # `wrangler deploy` were separate, forgettable steps). Runs only after the release publishes.
+  deploy-site:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Inject release version into site
+        run: bash Scripts/sync-site-version.sh
+
+      - name: Deploy site to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: site
