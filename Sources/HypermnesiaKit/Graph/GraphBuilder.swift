@@ -29,8 +29,10 @@ public enum GraphBuilder {
         }
 
         // 2. Shared files — bounded fan-out, typed by the pair.
-        // Classifier memories may carry absolute paths while codeRefs are repo-relative; fold an
-        // absolute key onto the (longest) relative key it ends with so the two still group.
+        // LEGACY SHIM: ingest now normalizes classifier paths to repo-relative at capture
+        // (`SessionIngestor.normalizedRelatedFiles`), but memories stored before that ship with
+        // absolute paths. Fold an absolute key onto the (longest) relative key it ends with so
+        // old and new nodes still group; delete once stored data is migrated.
         var relativeKeys: Set<String> = []
         for node in nodes {
             for file in node.data.relatedFiles {

@@ -11,7 +11,7 @@ import Foundation
 ///   - the hooks call the CLI with `--client cursor` so it reads Cursor's input/output schema.
 ///
 /// Cursor has no per-prompt context-injection hook, so hydration is `sessionStart`-only.
-public enum CursorHookInstaller {
+public enum CursorHookInstaller: HookInstallerType {
     static let marker = "hypermnesia"
     static let legacyMarker = "hyperthymesia"   // pre-rename hooks must stay detectable/removable
     static let hydrateEvents = ["sessionStart"]
@@ -102,20 +102,6 @@ public enum CursorHookInstaller {
             }
         }
         return paths
-    }
-
-    /// Recorded hook binaries that no longer exist / aren't executable — the hooks are present in
-    /// hooks.json yet every session's hook exec fails silently. Empty when nothing needs repair.
-    public static func missingBinaryPaths(projectPath: String? = nil) -> [String] {
-        installedBinaryPaths(projectPath: projectPath).filter {
-            !FileManager.default.isExecutableFile(atPath: $0)
-        }
-    }
-
-    /// True when hooks are recorded but at least one points at a binary that's gone — a broken
-    /// install that `isInstalled` reports as healthy.
-    public static func hasMissingBinary(projectPath: String? = nil) -> Bool {
-        !missingBinaryPaths(projectPath: projectPath).isEmpty
     }
 
     static func mergedEntry(into existing: Any?, commands: [String]) -> [[String: Any]] {

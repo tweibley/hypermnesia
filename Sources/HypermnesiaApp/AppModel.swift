@@ -174,7 +174,7 @@ final class AppModel {
     func reloadProjects() {
         guard let store else { return }
         let wasEmpty = projects.isEmpty
-        projects = (try? store.projects()) ?? []
+        projects = (try? store.visibleProjects()) ?? []
         // The magic moment made explicit: the store just went 0 → some while the app was running.
         // Suppressed for sample data (that's not a capture) and for the initial load of an
         // already-populated store.
@@ -221,7 +221,7 @@ final class AppModel {
 
     private func refreshTotalDraftCount() {
         guard let store else { totalDraftCount = 0; return }
-        let all = (try? store.projects()) ?? []
+        let all = (try? store.visibleProjects()) ?? []
         totalDraftCount = all.reduce(0) { sum, project in
             sum + ((try? store.counts(projectId: project, status: .draft)) ?? [:]).values.reduce(0, +)
         }
@@ -336,7 +336,7 @@ final class AppModel {
         guard !q.isEmpty else { return [] }
         var results: [MemoryNode] = []
         var seen = Set<String>()
-        for project in (try? store.projects()) ?? [] {
+        for project in (try? store.visibleProjects()) ?? [] {
             let nodes = (try? store.nodes(projectId: project, limit: 2000)) ?? []
             for node in nodes where node.title.lowercased().contains(q) || node.summary.lowercased().contains(q) {
                 if seen.insert(node.id).inserted { results.append(node) }
@@ -801,7 +801,9 @@ final class AppModel {
     private func runMaintenanceIfDue() async {
         guard let store else { return }
         let defaults = UserDefaults.standard
-        for project in (try? store.projects()) ?? [] {
+        // Truth, not the visible list: background maintenance must not skip projects a
+        // screenshot-mode env var happens to hide.
+        for project in (try? store.allProjects()) ?? [] {
             let key = "Hypermnesia.lastMaintenance.\(project)"
             let last = defaults.object(forKey: key) as? Date ?? .distantPast
             guard Date().timeIntervalSince(last) > 86_400 else { continue }
@@ -809,6 +811,8 @@ final class AppModel {
             let changed = await Task.detached { () -> Bool in
                 var didWork = false
                 if let repoPath = MemoryAuditor.repoPath(forProjectId: project) {
+                    // Heal git-renamed codeRefs before the read-only audit flags them as missing.
+                    MemoryAuditor.repairCodeRefPaths(store: store, projectId: project, repoPath: repoPath)
                     let findings = MemoryAuditor.audit(store: store, projectId: project, repoPath: repoPath)
                     didWork = MemoryAuditor.apply(findings, store: store) > 0 || didWork
                     let outcomes = MemoryAuditor.recordOutcomes(findings, store: store, projectId: project)
@@ -964,6 +968,8 @@ final class AppModel {
             if deep { self.processingStatus = "Deep check: asking the model about each memory…" }
             let result = await Task.detached { () -> (issues: Int, flagged: Int)? in
                 guard let repoPath = MemoryAuditor.repoPath(forProjectId: project) else { return nil }
+                // Heal git-renamed codeRefs before the read-only audit flags them as missing.
+                MemoryAuditor.repairCodeRefPaths(store: store, projectId: project, repoPath: repoPath)
                 var findings = MemoryAuditor.audit(store: store, projectId: project, repoPath: repoPath)
                 if deep {
                     findings += await MemoryAuditor.verify(

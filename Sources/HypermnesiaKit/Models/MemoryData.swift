@@ -218,6 +218,19 @@ public enum MemoryData: Codable, Equatable, Sendable, Hashable {
         }
     }
 
+    /// Same payload with each `relatedFiles` entry rewritten by `transform`. Fact/backlog carry no
+    /// files; codeRef's `filePath` is deliberately untouched — `CodeRefExtractor` already emits it
+    /// normalized, and it doubles as the node's dedup identity.
+    public func mappingRelatedFiles(_ transform: (String) -> String) -> MemoryData {
+        switch self {
+        case .decision(var d): d.relatedFiles = d.relatedFiles.map(transform); return .decision(d)
+        case .convention(var c): c.relatedFiles = c.relatedFiles.map(transform); return .convention(c)
+        case .intent(var i): i.relatedFiles = i.relatedFiles.map(transform); return .intent(i)
+        case .concern(var c): c.relatedFiles = c.relatedFiles.map(transform); return .concern(c)
+        case .fact, .backlog, .codeRef: return self
+        }
+    }
+
     private enum CodingKeys: String, CodingKey { case type, content }
 
     public init(from decoder: Decoder) throws {

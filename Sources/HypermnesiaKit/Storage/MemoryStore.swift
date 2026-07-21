@@ -173,14 +173,21 @@ public final class MemoryStore: Sendable {
         }
     }
 
-    /// Distinct project ids that have at least one (non-deleted) memory.
-    public func projects() throws -> [String] {
-        let all = try dbQueue.read { db in
+    /// Every distinct project id with at least one (non-deleted) memory — the store's truth,
+    /// unaffected by the screenshot-mode hide filter. Use for data-integrity work (ingest,
+    /// maintenance, export) that must never skip a project.
+    public func allProjects() throws -> [String] {
+        try dbQueue.read { db in
             try String.fetchAll(db, sql: """
                 SELECT DISTINCT projectId FROM memory_node WHERE deletedAt IS NULL ORDER BY projectId
                 """)
         }
-        return ProjectVisibility.visible(all) { $0 }
+    }
+
+    /// `allProjects()` minus anything `HYPERMNESIA_HIDE_PROJECTS` hides — for user-facing
+    /// surfaces (sidebar, badge, pickers), so screenshot mode can't leak a hidden project name.
+    public func visibleProjects() throws -> [String] {
+        ProjectVisibility.visible(try allProjects()) { $0 }
     }
 
     /// Count of non-deleted memories per type for a project.

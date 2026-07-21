@@ -211,7 +211,7 @@ struct Export: AsyncParsableCommand {
         }
         var nodes: [MemoryNode] = []
         if all {
-            for projectId in try store.projects() {
+            for projectId in try store.allProjects() {
                 nodes += try store.nodes(projectId: projectId, includeDeleted: includeDeleted, limit: 100_000)
             }
         } else {

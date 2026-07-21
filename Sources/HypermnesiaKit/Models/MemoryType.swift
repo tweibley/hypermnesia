@@ -101,6 +101,26 @@ public enum MemoryType: String, Codable, CaseIterable, Sendable, Hashable {
         }
     }
 
+    /// Whether drafts of this type are elevated to confirmed only by repeat sightings (or a
+    /// human) — never by the confident-capture fast path. CodeRefs are observed facts with a high
+    /// prior, but a one-off edit must stay a draft the user can ignore.
+    public var confirmsBySightingOnly: Bool {
+        switch self {
+        case .codeRef: true
+        default: false
+        }
+    }
+
+    /// Whether memories of this type compete for hydration ranking slots (session-start context
+    /// and per-prompt primary ranking). CodeRefs don't: they would crowd out the knowledge types,
+    /// so they enrich via annotations or query-path matching instead.
+    public var ranksInHydration: Bool {
+        switch self {
+        case .codeRef: false
+        default: true
+        }
+    }
+
     /// Geometric shape for graph rendering (resolved to a `Shape` in the app layer).
     public enum NodeShape: String, Codable, Sendable, Hashable {
         case hexagon

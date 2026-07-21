@@ -45,6 +45,42 @@ public enum ClaudeMCPInstaller {
         try ConfigFile.writeObject(settings, to: url)
     }
 
+    /// Health of the user-scope (`claude mcp add -s user`) registration, probed live.
+    public enum Health: Equatable {
+        case notRegistered
+        case registeredDisconnected
+        /// Registered in `~/.claude.json`, but the live `claude mcp list` probe failed or timed
+        /// out (it checks every configured server, so one slow/wedged server sinks it).
+        case registeredUnverified
+        case connected
+        /// The probe failed and no user-scope registration record exists to fall back on.
+        case unreadable
+    }
+
+    /// Probe the user-scope registration via `claude mcp list`. When the probe itself fails,
+    /// falls back to the registration record so a successful `mcp add` isn't reported as broken.
+    public static func health(claudeCLI: String) -> Health {
+        let list = Shell.run(claudeCLI, ["mcp", "list"], timeout: 20)
+        guard list.succeeded else {
+            // `claude mcp list` live-probes every configured server (project + plugin scopes too),
+            // so one slow server — or a cold `npx …@latest` fetch — times the whole command out.
+            return isRegisteredInUserScope() ? .registeredUnverified : .unreadable
+        }
+        let output = list.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !output.isEmpty else { return .notRegistered }
+        let lines = output.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) }
+        guard let line = lines.first(where: { $0.hasPrefix("\(server):") }) else { return .notRegistered }
+        return line.contains("✔ Connected") ? .connected : .registeredDisconnected
+    }
+
+    /// Whether `hypermnesia` is registered at user scope. Read-only peek at `~/.claude.json` —
+    /// Claude Code's own state file, which we deliberately never write (see the note above).
+    public static func isRegisteredInUserScope() -> Bool {
+        let url = URL(fileURLWithPath: NSString(string: "~/.claude.json").expandingTildeInPath)
+        let settings = (try? ConfigFile.readObject(at: url)) ?? [:]
+        return (settings["mcpServers"] as? [String: Any])?[server] != nil
+    }
+
     /// Settings with our server merged into `mcpServers` — for install + dry-run preview.
     public static func merged(into existing: [String: Any], binaryPath: String) -> [String: Any] {
         var settings = existing

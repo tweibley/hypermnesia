@@ -40,7 +40,7 @@ public enum MemoryHydrator {
         let confirmed = (try? store.allNodes(projectId: projectId, status: .confirmed)) ?? []
         let decayed: [MemoryNode] = confirmed.map { DecayEngine.decayed($0) }
         let eligible = decayed.filter {
-            $0.type != .codeRef && !$0.isSuperseded && $0.confidence >= options.minConfidence
+            $0.type.ranksInHydration && !$0.isSuperseded && $0.confidence >= options.minConfidence
         }
         let ranked = eligible.sorted { a, b in
             a.confidence != b.confidence ? a.confidence > b.confidence : a.updatedAt > b.updatedAt
@@ -84,7 +84,7 @@ public enum MemoryHydrator {
             .filter { !$0.isSuperseded && $0.confidence >= 0.50 }
         guard !pool.isEmpty else { return nil }
 
-        let primaryPool = pool.filter { $0.type != .codeRef }
+        let primaryPool = pool.filter { $0.type.ranksInHydration }
         let codeRefPool = pool.filter { $0.type == .codeRef }
 
         var primary: [MemoryNode] = []
@@ -103,7 +103,7 @@ public enum MemoryHydrator {
             let hits = (try? store.search(projectId: projectId, query: trimmed, limit: 30)) ?? []
             primary = hits
                 .map { DecayEngine.decayed($0) }
-                .filter { $0.status == .confirmed && !$0.isSuperseded && $0.confidence >= 0.50 && $0.type != .codeRef }
+                .filter { $0.status == .confirmed && !$0.isSuperseded && $0.confidence >= 0.50 && $0.type.ranksInHydration }
                 .prefix(limit)
                 .map { $0 }
         }

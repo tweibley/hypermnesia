@@ -204,6 +204,8 @@ struct Audit: AsyncParsableCommand {
         let projectId = ProjectIdentity.resolve(cwd: repoPath)
         let store = try MemoryStore()
 
+        // Heal git-renamed codeRefs before the read-only audit flags them as missing.
+        MemoryAuditor.repairCodeRefPaths(store: store, projectId: projectId, repoPath: repoPath)
         var findings = MemoryAuditor.audit(store: store, projectId: projectId, repoPath: repoPath)
         if deep {
             FileHandle.standardError.write(Data("Verifying with \(Classifiers.autoDescription)…\n".utf8))

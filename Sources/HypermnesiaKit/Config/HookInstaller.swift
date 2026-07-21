@@ -2,7 +2,7 @@ import Foundation
 
 /// Installs/removes Hypermnesia's capture + hydrate hooks in Claude Code settings. Shared by the
 /// CLI (`install-hooks`) and the app's Settings toggle.
-public enum HookInstaller {
+public enum HookInstaller: HookInstallerType {
     static let marker = "hypermnesia"
     /// Pre-rename binary name: detection/uninstall/replace must keep matching hooks installed
     /// under the old name, or a rename-era machine ends up with doubled (and broken) hooks.
@@ -115,22 +115,6 @@ public enum HookInstaller {
             }
         }
         return paths
-    }
-
-    /// Recorded hook binaries that no longer exist / aren't executable — the hooks are present in
-    /// settings.json yet every session's hook exec fails silently. Empty when there's nothing to
-    /// repair (including when hooks aren't installed at all).
-    public static func missingBinaryPaths(projectPath: String? = nil) -> [String] {
-        installedBinaryPaths(projectPath: projectPath).filter {
-            !FileManager.default.isExecutableFile(atPath: $0)
-        }
-    }
-
-    /// True when hooks are recorded but at least one points at a binary that's gone — a broken
-    /// install that `isInstalled` reports as healthy. Surfaced as a repair prompt in Settings and a
-    /// distinct line in `hypermnesia doctor`.
-    public static func hasMissingBinary(projectPath: String? = nil) -> Bool {
-        !missingBinaryPaths(projectPath: projectPath).isEmpty
     }
 
     /// Pull the binary path back out of an installed hook command. Our commands are built as

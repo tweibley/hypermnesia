@@ -63,7 +63,7 @@ struct StoreTests {
 
         #expect(try store.nodes(projectId: "github.com/acme/a").count == 1)
         #expect(try store.nodes(projectId: "github.com/acme/b").count == 1)
-        #expect(try Set(store.projects()) == ["github.com/acme/a", "github.com/acme/b"])
+        #expect(try Set(store.allProjects()) == ["github.com/acme/a", "github.com/acme/b"])
     }
 
     @Test("soft delete hides from lists and search; counts reflect it")
@@ -286,7 +286,7 @@ struct StoreTests {
 
         let removed = try store.hardDeleteProject(projectId: p1)
         #expect(removed == 2)
-        #expect(try store.projects() == [p2])
+        #expect(try store.allProjects() == [p2])
         #expect(try store.nodes(projectId: p1).isEmpty)
         #expect(try store.search(projectId: p1, query: "A1").isEmpty)
         #expect(try store.edges(projectId: p1).isEmpty)
@@ -302,7 +302,7 @@ struct StoreTests {
 
         let removed = try store.hardDeleteAllMemories()
         #expect(removed == 2)
-        #expect(try store.projects().isEmpty)
+        #expect(try store.allProjects().isEmpty)
         #expect(try store.nodes(projectId: "github.com/acme/a").isEmpty)
         #expect(try store.search(projectId: "github.com/acme/b", query: "B1").isEmpty)
     }

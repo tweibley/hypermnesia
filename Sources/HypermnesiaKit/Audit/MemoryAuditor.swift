@@ -83,12 +83,12 @@ public enum MemoryAuditor {
 
     /// Cheap checks against the working tree at `repoPath`: related files that no longer exist, and
     /// files that changed between the memory's commit and HEAD.
+    ///
+    /// Read-only — never mutates the store. Orchestrators should call `repairCodeRefPaths` first so
+    /// git-renamed codeRefs are healed rather than flagged as spurious missing-file findings.
     public static func audit(
         store: MemoryStore, projectId: String, repoPath: String, status: MemoryStatus? = .confirmed
     ) -> [AuditFinding] {
-        // Heal renamed codeRefs first so they don't emit spurious missing-file findings.
-        _ = repairCodeRefPaths(store: store, projectId: projectId, repoPath: repoPath, status: status)
-
         let nodes = (try? store.allNodes(projectId: projectId, status: status)) ?? []
         let head = ProjectIdentity.headSha(cwd: repoPath)
         var findings: [AuditFinding] = []

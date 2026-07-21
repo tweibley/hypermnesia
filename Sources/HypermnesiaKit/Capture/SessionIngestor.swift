@@ -139,14 +139,14 @@ public enum SessionIngestor {
         }
 
         let when = convo.endedAt ?? Date()
-        let nodes = memories.map { memory in
+        let nodes = normalizedRelatedFiles(memories.map { memory in
             DecayEngine.decayed(   // age confidence so old sessions land Aging/Stale/Dormant
                 memory.toDraftNode(
                     projectId: projectId, sessionId: sessionId, createdAt: when,
                     commitSha: commitSha, branch: convo.gitBranch, status: status
                 )
             )
-        }
+        }, projectId: projectId, events: parsedEvents)
         // Deterministic codeRefs from the same event slice the classifier saw (cursor-respecting).
         // Runs even when classification produced nothing — edits are observed facts, not inferences.
         let eventSlice = cursor > 0 ? Array(parsedEvents[cursor...]) : parsedEvents
@@ -253,12 +253,12 @@ public enum SessionIngestor {
 
         let when = convo.endedAt ?? Date()
         let observationAt = source == .backfill ? when : Date()
-        let nodes = memories.map {
+        let nodes = normalizedRelatedFiles(memories.map {
             DecayEngine.decayed($0.toDraftNode(
                 projectId: projectId, sessionId: sessionId, createdAt: when,
                 commitSha: commitSha, branch: convo.gitBranch, status: .draft
             ))
-        }
+        }, projectId: projectId, events: events)
         let config = AppConfigStore.loadBestEffort()
         let codeRefs = codeRefNodes(
             from: newEvents, projectId: projectId, sessionId: sessionId,
@@ -405,7 +405,7 @@ public enum SessionIngestor {
         // settle on the first pass), then reconcile conflicts among the confirmed set — newly
         // confirmed memories may contradict older ones.
         let confirmConfident = AppConfigStore.loadBestEffort().autoConfirmConfidentCaptures
-        for projectId in (try? store.projects()) ?? [] {
+        for projectId in (try? store.allProjects()) ?? [] {
             if retriageDrafts(store: store, projectId: projectId, confirmConfident: confirmConfident) > 0 {
                 touchedProjects.insert(projectId)
             }
@@ -436,8 +436,7 @@ public enum SessionIngestor {
         let drafts = (try? store.allNodes(projectId: projectId, status: .draft)) ?? []
         var confirmed = 0
         for draft in drafts {
-            // CodeRefs confirm via sighting accrual only — never the confident-capture floor.
-            guard draft.type != .codeRef,
+            guard !draft.type.confirmsBySightingOnly,
                   draft.conversationId != nil,
                   draft.supersedesId == nil,
                   !draft.isSuperseded, !draft.isDeleted,
@@ -478,9 +477,27 @@ public enum SessionIngestor {
             sessionId: sessionId,
             createdAt: createdAt,
             commitSha: commitSha,
-            branch: branch,
-            projectRoot: CodeRefExtractor.resolveRoot(projectRoot: nil, projectId: projectId, events: events)
+            branch: branch
         )
+    }
+
+    /// Classifier `relatedFiles` may arrive absolute (the model echoes tool paths verbatim);
+    /// store them repo-relative — the contract codeRefs already follow — so graph grouping,
+    /// dedup, and audit all key on one form instead of compensating downstream. Paths outside
+    /// the repo root (or when no root resolves) are kept as-is rather than dropped.
+    static func normalizedRelatedFiles(
+        _ nodes: [MemoryNode], projectId: String, events: [TranscriptEvent]
+    ) -> [MemoryNode] {
+        guard let root = CodeRefExtractor.resolveRoot(projectRoot: nil, projectId: projectId, events: events)
+        else { return nodes }
+        return nodes.map { node in
+            var node = node
+            node.data = node.data.mappingRelatedFiles { path in
+                guard path.hasPrefix("/") else { return path }
+                return CodeRefExtractor.relativeIfInside(absolute: path, root: root) ?? path
+            }
+            return node
+        }
     }
 
     /// Run every classifier output through `CaptureValidator`:
@@ -539,12 +556,10 @@ public enum SessionIngestor {
                     // Revisions ALWAYS stay drafts: confirming one retires a memory a human
                     // (or an earlier auto-confirm) already accepted — that call needs a human.
                     node.supersedesId = conflicting.id
-                } else if confirmConfident, node.type != .codeRef, node.status == .draft,
+                } else if confirmConfident, !node.type.confirmsBySightingOnly, node.status == .draft,
                           node.confidence >= Self.confidentCaptureFloor {
                     // Human-in-the-loop only as needed: a clean, fresh, high-confidence capture
                     // goes live immediately instead of waiting in the inbox.
-                    // CodeRefs are observed facts with high confidence but must accrue sightings
-                    // before auto-confirm — a one-off edit stays a draft the user can ignore.
                     node.status = .confirmed
                 }
                 fresh.append(node)

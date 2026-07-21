@@ -123,7 +123,7 @@ extension AppModel {
         guard config.dreamsEnabled else { return }
         let now = Date()
 
-        let projects = (try? store.projects()) ?? []
+        let projects = (try? store.visibleProjects()) ?? []
         let due = projects.filter { project in
             DreamScheduler.isDue(
                 lastNight: (try? store.latestDreamNight(projectId: project)) ?? nil, now: now)

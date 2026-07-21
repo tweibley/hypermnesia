@@ -10,7 +10,7 @@ import Foundation
 /// single top-level `"hypermnesia"` key outright — install sets it, uninstall removes it.
 /// Events: `PreInvocation` fires before every model call (the hydrate command itself injects only
 /// at conversation start); `Stop` fires when the execution loop ends (capture + drain).
-public enum AntigravityHookInstaller {
+public enum AntigravityHookInstaller: HookInstallerType {
     /// The top-level hook name we own in `hooks.json`.
     static let hookKey = "hypermnesia"
     static let legacyHookKey = "hyperthymesia"   // pre-rename key: replaced on install, removed on uninstall
@@ -94,20 +94,6 @@ public enum AntigravityHookInstaller {
             }
         }
         return paths
-    }
-
-    /// Recorded hook binaries that no longer exist / aren't executable — the hooks are present in
-    /// hooks.json yet every session's hook exec fails silently. Empty when nothing needs repair.
-    public static func missingBinaryPaths(projectPath: String? = nil) -> [String] {
-        installedBinaryPaths(projectPath: projectPath).filter {
-            !FileManager.default.isExecutableFile(atPath: $0)
-        }
-    }
-
-    /// True when hooks are recorded but at least one points at a binary that's gone — a broken
-    /// install that `isInstalled` reports as healthy.
-    public static func hasMissingBinary(projectPath: String? = nil) -> Bool {
-        !missingBinaryPaths(projectPath: projectPath).isEmpty
     }
 
     // MARK: - Helpers
