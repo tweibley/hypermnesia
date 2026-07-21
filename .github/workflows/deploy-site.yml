@@ -1,0 +1,31 @@
+# Deploy the marketing site to Cloudflare with the version injected from VERSION.
+#
+# Called by release.yml after each release publishes (so the site can never lag a release),
+# and manually runnable via workflow_dispatch to test the token/pipeline or push site-only
+# changes without cutting a release. Requires the CLOUDFLARE_API_TOKEN secret (minimal scope:
+# Workers Scripts:Edit + hypermnesia.app Workers Routes:Edit — see release.yml header).
+#
+# Note: this is deliberately NOT triggered `on: release published` — releases created by the
+# release workflow's GITHUB_TOKEN don't emit events that trigger other workflows, so that
+# hookup would silently never fire. The explicit workflow_call from release.yml is the only
+# reliable path.
+name: deploy-site
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Inject version from VERSION into site
+        run: bash Scripts/sync-site-version.sh
+
+      - name: Deploy site to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: site
