@@ -5,6 +5,37 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-20
+
+### Added
+
+- **Code-reference capture (opt-in).** Hypermnesia now produces `codeRef` memories
+  deterministically from the file edits observed in transcripts — no LLM involved — fulfilling the
+  classifier's long-standing "captured separately from file edits" promise. One aggregated draft
+  node per repo-relative path, confirmed by sighting accrual; paths are normalized per client
+  dialect (Claude Code, Cursor, Antigravity), filtered through a denylist plus your repo's own
+  `.gitignore`, and repaired across git renames by the memory auditor. Code refs stay out of
+  SessionStart ranking and instead annotate linked memories or surface when a prompt mentions the
+  file. Off by default — enable in Settings → Capture (`HYPERMNESIA_CODE_REFS` overrides for dev).
+- **Night-sky constellation graph.** The graph view was unusable past ~60 nodes; it's now a
+  single-canvas renderer that stays legible at scale: importance-driven node sizing and label
+  priority, greedy label decluttering, named cluster constellations with soft hulls, curved edges
+  that fade with zoom, 2-hop click-to-focus, an auto-framing camera, and twinkle on fresh memories
+  (respects Reduce Motion). Dense graphs drop the chronological session chains so semantic
+  clusters stay readable.
+- **Site: real-app screenshot tour** — six screenshots of Hypermnesia holding this repository's
+  own memory, generated reproducibly by two env-gated dev harnesses
+  (`HYPERMNESIA_HIDE_PROJECTS`, `HYPERMNESIA_SCREENSHOT_DIR`).
+
+### Fixed
+
+- **MCP registration no longer reports a false error.** `claude mcp list` live-probes every
+  configured MCP server, so one slow server (or a cold `npx` fetch) timed the check out and a
+  successful registration showed "Could not read MCP server list". The app now falls back to the
+  registration record itself and shows "Registered — connection check timed out" instead.
+- **GitHub release notes** now use the version's curated CHANGELOG section as the release body
+  instead of an empty auto-generated one.
+
 ## [0.2.1] — 2026-07-20
 
 Bug-fix release: 38 user-facing issues surfaced by an adversarial multi-agent audit, plus a

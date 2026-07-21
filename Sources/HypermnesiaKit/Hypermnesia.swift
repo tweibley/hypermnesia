@@ -10,5 +10,5 @@ import Foundation
 /// See `docs/IMPLEMENTATION-PLAN.md` and `docs/design/` for the full design.
 public enum Hypermnesia {
     /// Semantic version of the engine. Keep in lockstep with the top-level `VERSION` file.
-    public static let version = "0.2.1"
+    public static let version = "0.3.0"
 }
