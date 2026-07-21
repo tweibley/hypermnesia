@@ -1,538 +1,570 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hypermnesia — durable, decaying memory for your coding agents</title>
-<meta name="description" content="A local-first memory system that gives Claude Code, Cursor, and Google Antigravity a durable, queryable memory of every project. Captured from real sessions, typed, decaying, injected back when relevant — and consolidated overnight into an evidence-backed dream journal. No telemetry.">
-<link rel="canonical" href="https://hypermnesia.app/">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Hypermnesia">
-<meta property="og:url" content="https://hypermnesia.app/">
-<meta property="og:title" content="Hypermnesia — durable, decaying memory for your coding agents">
-<meta property="og:description" content="Local-first memory for Claude Code, Cursor, and Google Antigravity. Captured from real sessions, typed, decaying, injected back when relevant — and consolidated overnight into an evidence-backed dream journal. No telemetry.">
-<meta property="og:image" content="https://hypermnesia.app/media/og.jpg">
-<meta property="og:image:width" content="2560">
-<meta property="og:image:height" content="1280">
-<meta property="og:image:alt" content="Hypermnesia — local-first, decaying memory for coding agents.">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://hypermnesia.app/media/og.jpg">
-<meta name="twitter:image:alt" content="Hypermnesia — local-first, decaying memory for coding agents.">
-<meta name="theme-color" content="#0b0812">
-<link rel="preload" href="/fonts/instrumentserif-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/ibmplexmono-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/ibmplexsans-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/style.css">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Hypermnesia",
-  "operatingSystem": "macOS 14+",
-  "applicationCategory": "DeveloperApplication",
-  "url": "https://hypermnesia.app/",
-  "softwareVersion": "0.3.0",
-  "license": "https://github.com/tweibley/hypermnesia/blob/main/LICENSE",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
-  "description": "A local-first memory system that gives Claude Code, Cursor, and Google Antigravity a durable, decaying, queryable memory of every project — including Memory Dreams, overnight consolidation into an evidence-backed journal."
-}
-</script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    {
-      "@type": "Question",
-      "name": "Why not just CLAUDE.md?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Hypermnesia writes your CLAUDE.md — hypermnesia export --markdown renders a project's confirmed memory as a committable MEMORY.md. The difference is everything around that file: memories decay unless they keep proving useful, carry applied/overridden evidence counters, are retired by newer contradicting captures, and are injected by relevance instead of as one ever-growing preamble. A hand-tended CLAUDE.md goes stale silently; here staleness is a first-class, visible state."
-      }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hypermnesia — Durable, Decaying Memory for Claude Code, Cursor & Antigravity</title>
+
+  <!-- Meta & OpenGraph -->
+  <meta name="title" content="Hypermnesia — Durable, Decaying Memory for Claude Code, Cursor & Antigravity">
+  <meta name="description" content="A local-first memory system that gives Claude Code, Cursor, and Google Antigravity a durable, queryable memory of every project — captured from real sessions, typed, decaying, injected back when relevant, and consolidated overnight into Memory Dreams. Zero telemetry.">
+  <link rel="canonical" href="https://hypermnesia.app/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Hypermnesia">
+  <meta property="og:url" content="https://hypermnesia.app/">
+  <meta property="og:title" content="Hypermnesia — Durable, Decaying Memory for AI Coding Agents">
+  <meta property="og:description" content="Local-first memory for Claude Code, Cursor, and Google Antigravity. Captured from real sessions, typed, decaying, injected back when relevant — and consolidated overnight into Memory Dreams. No telemetry.">
+  <meta property="og:image" content="https://hypermnesia.app/media/og.jpg">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://hypermnesia.app/media/og.jpg">
+  <meta name="twitter:image:alt" content="Hypermnesia — local-first, decaying memory for coding agents.">
+  <meta name="theme-color" content="#060609">
+
+  <!-- Self-hosted fonts (no third-party requests) -->
+  <link rel="preload" href="/fonts/instrumentserif-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/ibmplexmono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/ibmplexsans-400.woff2" as="font" type="font/woff2" crossorigin>
+
+  <link rel="stylesheet" href="/style.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Hypermnesia",
+    "operatingSystem": "macOS 14+",
+    "applicationCategory": "DeveloperApplication",
+    "url": "https://hypermnesia.app/",
+    "softwareVersion": "0.3.1",
+    "license": "https://github.com/tweibley/hypermnesia/blob/main/LICENSE",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
     },
-    {
-      "@type": "Question",
-      "name": "Isn't this just RAG?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "The retrieval part is deliberately boring (FTS5 + embeddings). The interesting parts sit around it: capture is automatic from real sessions; memories are typed, with structure like \"does NOT apply to\"; contradictions are detected at capture time; and decay + belief decide whether a memory is still trustworthy, not just similar. On explicit-memory tasks, hydration matched a paste-the-fact-into-the-prompt oracle."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Does injected memory ever hurt?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Measured: yes, once — memory injection broke 1 of 18 adversarial control tasks that the baseline passed. The mitigations are structural: overridden memories lose belief, stale ones fall below the injection floor until revalidated, and risky writes land as drafts you confirm before they hydrate anything."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Does it slow sessions down or eat tokens?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Hydration injects a small, bounded set: confirmed memories above a confidence floor at session start, and up to 8 relevance-ranked ones per prompt. Capture is asynchronous — hooks checkpoint and return; classification runs out-of-band, so nothing blocks the session. The only recurring spend is classification, on the model you choose."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Dreams run an LLM over my sessions while I sleep?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "Only if you turn them on — Dreams are off by default, and enabling shows the cost estimate first. The budget is one classifier call per project per night, under a nightly cap you set, and it only runs while the machine is idle on adequate power. Every entry records its calls and estimated cost. Dreams never confirm memories or install skills on their own: drafts go through the review inbox, skills stage for an explicit install with one-tap uninstall. A night with nothing real to say is logged as quiet — never padded."
-      }
-    },
-    {
-      "@type": "Question",
-      "name": "Why macOS-only? Will there be a Linux build?",
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": "The engine and CLI are UI-free Swift over GRDB/SQLite — nothing in the capture-to-hydrate loop is macOS-specific; the SwiftUI app is. A headless Linux build of the CLI + hooks is plausible; it just isn't built or tested yet."
-      }
-    }
-  ]
-}
-</script>
-<noscript><style>.reveal{opacity:1;transform:none}.bench-bar{width:var(--w)}</style></noscript>
-<!-- Website analytics only. The app itself sends no telemetry. -->
-<script>
-!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
-posthog.init('phc_yEhc9D5ih2obNdsHMv6VZhkVJzVKRm9rjPY84HQTrwjA',{
-  api_host:'https://us.i.posthog.com',
-  ui_host:'https://us.posthog.com',
-  defaults:'2025-05-24',
-  person_profiles:'identified_only',
-  persistence:'localStorage+cookie',
-  respect_dnt:true
-});
-</script>
+    "description": "A local-first memory system that gives Claude Code, Cursor, and Google Antigravity a durable, decaying, queryable memory of every project — including Memory Dreams, overnight consolidation into an evidence-backed journal."
+  }
+  </script>
+  <!-- Website analytics only. The app itself sends no telemetry. -->
+  <script>
+  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+  posthog.init('phc_yEhc9D5ih2obNdsHMv6VZhkVJzVKRm9rjPY84HQTrwjA',{
+    api_host:'https://us.i.posthog.com',
+    ui_host:'https://us.posthog.com',
+    defaults:'2025-05-24',
+    person_profiles:'identified_only',
+    persistence:'localStorage+cookie',
+    respect_dnt:true
+  });
+  </script>
 </head>
 <body>
 
-<header class="site-header">
-  <a class="wordmark" href="#top" aria-label="Hypermnesia — home">
-    <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-opacity=".35"/><circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-opacity=".6"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
-    <span>Hypermnesia</span>
-  </a>
-  <nav aria-label="Site">
-    <a href="#how">How it works</a>
-    <a href="#dreams">Dreams</a>
-    <a href="#app">The app</a>
-    <a href="#privacy">Privacy</a>
-    <a href="#results">Results</a>
-    <a href="#clients">Clients</a>
-    <a href="#faq">FAQ</a>
-    <a class="btn btn-ghost" href="https://github.com/tweibley/hypermnesia">GitHub&nbsp;↗</a>
-  </nav>
-</header>
+  <!-- Navigation Bar -->
+  <header class="navbar" id="navbar">
+    <div class="container nav-container">
+      <a href="#" class="nav-brand" id="nav-brand">
+        <svg class="glyph-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-opacity=".35"/><circle cx="12" cy="12" r="5.5" stroke="currentColor" stroke-opacity=".6"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+        <span>HYPERMNESIA</span>
+      </a>
 
-<main id="top">
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#playground" class="nav-link" id="nav-link-playground">Playground</a></li>
+          <li><a href="#how" class="nav-link" id="nav-link-how">How It Works</a></li>
+          <li><a href="#dreams" class="nav-link" id="nav-link-dreams">Dreams</a></li>
+          <li><a href="#clients" class="nav-link" id="nav-link-clients">Setup</a></li>
+          <li><a href="#results" class="nav-link" id="nav-link-results">Evals</a></li>
+          <li><a href="#cli" class="nav-link" id="nav-link-cli">CLI <span class="kbd-badge">/</span></a></li>
+          <li><a href="#faq" class="nav-link" id="nav-link-faq">FAQ</a></li>
+        </ul>
+      </nav>
 
-  <!-- ============ HERO ============ -->
-  <section class="hero">
-    <p class="entry reveal">
-      <span class="headword">hy·per·mne·sia</span>
-      <span class="gram"><i>n.</i></span>
-    </p>
-    <p class="definition reveal">unusually vivid or complete memory; <em>abnormally sharp recall of the past.</em></p>
-
-    <h1 class="tagline reveal">Your coding agent forgets.<br>This is its memory.</h1>
-
-    <p class="lede reveal">
-      Hypermnesia is a <strong>local-first</strong> memory system for <strong>Claude&nbsp;Code</strong>,
-      <strong>Cursor</strong>, and <strong>Google&nbsp;Antigravity</strong>. It captures the decisions
-      and conventions behind your codebase from real sessions, retires them when they go stale, and
-      injects the survivors into new ones — on-device, no telemetry, and measured: automatic hydration
-      took a memoryless agent from <strong>3/24 to 15/24</strong> on tasks whose answer existed only in memory.
-    </p>
-
-    <p class="cta-row reveal">
-      <a class="btn btn-primary" href="https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip">⬇&nbsp;&nbsp;Download for macOS</a>
-      <a class="btn btn-ghost" href="#start">Quick start&nbsp;↓</a>
-      <span class="cta-meta">v0.3.0&nbsp;·&nbsp;MIT&nbsp;·&nbsp;macOS&nbsp;14+&nbsp;·&nbsp;one&nbsp;SQLite&nbsp;file&nbsp;·&nbsp;one-command&nbsp;uninstall</span>
-    </p>
-
-    <figure class="viewer reveal">
-      <i class="c c1"></i><i class="c c2"></i><i class="c c3"></i><i class="c c4"></i>
-      <div class="viewer-hud" aria-hidden="true">
-        <span>MRI&nbsp;·&nbsp;LIVE&nbsp;REPLAY</span>
-        <span>PROJ&nbsp;acme/widgets</span>
-      </div>
-      <img src="/media/replay.gif" width="1280" height="800" loading="lazy"
-           alt="The Brain MRI replay: a project's memories arranged as a brain, with pulses firing for real session events — recalls, captures, applies — while per-type counters tick up and a timeline playhead advances">
-      <div class="viewer-hud hud-bottom" aria-hidden="true">
-        <span>EVERY&nbsp;PULSE&nbsp;=&nbsp;A&nbsp;REAL&nbsp;SESSION&nbsp;EVENT</span>
-        <span>RECALL&nbsp;·&nbsp;CAPTURE&nbsp;·&nbsp;APPLY</span>
-      </div>
-      <div class="scanline" aria-hidden="true"></div>
-      <figcaption>The app’s live MRI view, exported as a replay — every pulse is a real event from a coding session, replayed on its wall-clock timestamp (rendered here from sample data).</figcaption>
-    </figure>
-  </section>
-
-  <!-- ============ THE PROBLEM ============ -->
-  <section id="problem" class="section">
-    <p class="kicker reveal">01&nbsp;/&nbsp;The problem</p>
-    <h2 class="reveal">Sessions end. Context dies.</h2>
-    <p class="section-lede reveal">Yesterday you told your agent the API speaks cents, not dollars. Today it suggests the float again. Every session re-litigates settled decisions, re-suggests banned patterns, and loses the <em>why</em> behind the code when the context window closes. That tax is paid per session, forever — unless something remembers.</p>
-    <div class="bench reveal" role="img" aria-label="Benchmark: a memoryless agent solved 3 of 24 tasks; the same agent with hydrated memory solved 15 of 24">
-      <div class="bench-row">
-        <span class="bench-label">same agent, no memory</span>
-        <span class="bench-track"><i class="bench-bar" style="--w:12.5%"></i></span>
-        <span class="bench-num">3<span>/24</span></span>
-      </div>
-      <div class="bench-row is-hot">
-        <span class="bench-label">same agent, memory hydrated</span>
-        <span class="bench-track"><i class="bench-bar" style="--w:62.5%"></i></span>
-        <span class="bench-num">15<span>/24</span></span>
+      <div class="nav-actions">
+        <a href="https://github.com/tweibley/hypermnesia" class="btn btn-ghost" id="nav-btn-github" target="_blank" rel="noopener">
+          GitHub ↗
+        </a>
+        <a href="#download" class="btn btn-primary" id="nav-btn-download">
+          Download macOS App
+        </a>
       </div>
     </div>
-    <p class="caveat reveal">Tasks where the required convention exists <em>only</em> in memory. Same model, same tasks — the only variable is memory. Receipts, caveats, and the case where memory <em>hurt</em>: <a href="#results">07&nbsp;/&nbsp;Evals</a>.</p>
-  </section>
+  </header>
 
-  <!-- ============ THE ARTIFACT ============ -->
-  <section id="memory" class="section">
-    <p class="kicker reveal">02&nbsp;/&nbsp;The artifact</p>
-    <h2 class="reveal">What a memory actually looks like</h2>
-    <p class="section-lede reveal">Not a blob of chat history. Every capture is a typed record with scope rules, evidence counters, a decay state, and provenance it can be audited by.</p>
+  <main>
+    <!-- Hero Section -->
+    <section class="hero" id="top">
+      <div class="container">
+        <div class="hero-header">
+          <div class="dictionary-entry">
+            <span class="headword">hy·per·mne·sia</span>
+            <span class="gram"><i>n.</i></span>
+          </div>
 
-    <article class="memcard reveal" aria-label="Example memory record (sample data)">
-      <header class="mem-head">
-        <span class="mem-type" style="--dot:#8b5cf6">convention</span>
-        <span class="mem-state d-fresh">fresh</span>
-        <span class="mem-belief">belief&nbsp;0.92</span>
-      </header>
-      <p class="mem-body">Timestamps are stored as UTC epoch millis; convert to local time at the UI edge only.</p>
-      <dl class="mem-rules">
-        <div><dt>applies to</dt><dd>persistence, API payloads, background jobs</dd></div>
-        <div class="not"><dt>does NOT apply to</dt><dd>one-off migration scripts replaying legacy rows</dd></div>
-      </dl>
-      <footer class="mem-meta">
-        <span>applied&nbsp;14×&nbsp;·&nbsp;overridden&nbsp;1×</span>
-        <span>captured from a real session&nbsp;·&nbsp;pinned to&nbsp;<code>a3f92c1</code></span>
-      </footer>
-    </article>
-    <p class="caveat reveal">A representative record (sample data) — the same shape every capture takes.</p>
+          <div class="definition">
+            unusually vivid or complete memory; <em>abnormally sharp recall of the past.</em>
+          </div>
 
-    <div class="types reveal">
-      <p class="types-title">Seven types, not one blob</p>
-      <ul class="chips" aria-label="Memory types">
-        <li style="--dot:#a855f7">decision</li>
-        <li style="--dot:#8b5cf6">convention</li>
-        <li style="--dot:#22c55e">intent</li>
-        <li style="--dot:#22d3ee">fact</li>
-        <li style="--dot:#eab308">concern</li>
-        <li style="--dot:#6366f1">backlog</li>
-        <li style="--dot:#2dd4bf">code&nbsp;ref</li>
-      </ul>
-      <p class="types-note">The type decides how a memory behaves: conventions carry scope rules like the one above, concerns carry severity, decisions carry the rejected alternative — and code refs pin to commits and deep-link into your editor or GitHub.</p>
-    </div>
-  </section>
+          <h1 class="hero-tagline">
+            Your coding agent forgets.<br><span class="text-gradient-purple">This is its memory.</span>
+          </h1>
 
-  <!-- ============ HOW IT WORKS ============ -->
-  <section id="how" class="section">
-    <p class="kicker reveal">03&nbsp;/&nbsp;How it works</p>
-    <h2 class="reveal">The loop</h2>
-    <ol class="loop">
-      <li class="reveal">
-        <span class="step">Capture</span>
-        <p>Hooks checkpoint the transcript <em>during</em> the session — capture is incremental and asynchronous, so nothing ever blocks your agent.</p>
-      </li>
-      <li class="reveal">
-        <span class="step">Classify</span>
-        <p>A pluggable LLM (Gemini by default, <code>claude&nbsp;-p</code> fallback) reads each new slice and extracts typed memories.</p>
-      </li>
-      <li class="reveal">
-        <span class="step">Curate</span>
-        <p>Confident captures go live on their own; risky writes wait as drafts for your confirm. Near-duplicates merge, and a newer memory that contradicts an older one retires it.</p>
-      </li>
-      <li class="reveal">
-        <span class="step">Decay</span>
-        <p>Memories lose confidence as they age unless use revalidates them. Staleness isn’t silent — it’s a visible, first-class state.</p>
-        <div class="decay" role="img" aria-label="Decay states: fresh, aging, stale, dormant">
-          <span class="d-fresh">fresh</span><span class="d-aging">aging</span><span class="d-stale">stale</span><span class="d-dormant">dormant</span>
+          <p class="hero-lede">
+            Hypermnesia is a <strong>local-first</strong> memory system for <strong>Claude Code</strong>, <strong>Cursor</strong>, and <strong>Google Antigravity</strong>. It captures codebase decisions from real sessions, decays stale context, and hydrates future sessions with surgical precision.
+          </p>
+
+          <div class="hero-actions">
+            <a href="#download" class="btn btn-primary" id="hero-btn-download" style="padding: 12px 26px; font-size: 0.9375rem;">
+              Download macOS App (Universal)
+            </a>
+            <a href="#playground" class="btn btn-secondary" id="hero-btn-playground" style="padding: 12px 24px; font-size: 0.9375rem;">
+              Try Live Memory Playground →
+            </a>
+          </div>
+
+          <div class="hero-meta">
+            <span>macOS 14+ • 100% On-Device SQLite • Zero App Telemetry</span>
+          </div>
         </div>
-      </li>
-      <li class="reveal">
-        <span class="step">Hydrate</span>
-        <p>The relevant, still-trustworthy memories are injected into new sessions at start, and per-prompt by relevance — a small, bounded, confidence-gated set.</p>
-      </li>
-    </ol>
-    <p class="loop-return reveal"><span class="lr-glyph" aria-hidden="true">↺</span> back to 01 — a hydrated session is itself captured; the loop closes. And overnight, a slower loop runs over the week: <a href="#dreams">04&nbsp;/&nbsp;Dreams</a>.</p>
-  </section>
 
-  <!-- ============ DREAMS ============ -->
-  <section id="dreams" class="section">
-    <p class="kicker reveal">04&nbsp;/&nbsp;Overnight</p>
-    <h2 class="reveal">It dreams — with receipts.</h2>
-    <p class="section-lede reveal">After your Mac wakes and goes idle, Hypermnesia re-reads the last few days of sessions and the memory they built, and writes a journal entry: epiphanies that cite their evidence, draft memories for your review inbox — and when the <em>same</em> friction shows up in two different sessions, a skill your agent can install (and uninstall, and be reported back on). No claim ships without its receipt.</p>
+        <!-- Brain MRI Visualizer Container with Filter Chips -->
+        <div class="hero-visual-card">
+          <div class="visual-header">
+            <div class="visual-toolbar">
+              <span style="font-weight: 600; color: var(--ink);">Filter Memory Graph:</span>
+              <button class="filter-chip active" data-filter="all">All (44)</button>
+              <button class="filter-chip" data-filter="decision">Decisions</button>
+              <button class="filter-chip" data-filter="convention">Conventions</button>
+              <button class="filter-chip" data-filter="intent">Intents</button>
+              <button class="filter-chip" data-filter="fact">Facts</button>
+              <button class="filter-chip" data-filter="concern">Concerns</button>
+            </div>
+            <div style="font-family: var(--mono); font-size: 0.75rem; color: var(--dim);">
+              Brain MRI Replay Monitor
+            </div>
+          </div>
 
-    <article class="memcard reveal" aria-label="A real Dream Journal entry from this repository's own history">
-      <header class="mem-head">
-        <span class="mem-type" style="--dot:#93b4ff">dream</span>
-        <span class="mem-state d-fresh">2026-07-18</span>
-        <span class="dream-strip" role="img" aria-label="Last seven nights: two skipped, one quiet, three skipped, one dreamed">
-          <b class="dn-skipped">–</b><b class="dn-skipped">–</b><b class="dn-quiet">○</b><b class="dn-skipped">–</b><b class="dn-skipped">–</b><b class="dn-skipped">–</b><b class="dn-dreamed">●</b>
-        </span>
-        <span class="mem-belief">1&nbsp;call&nbsp;·&nbsp;~$0.005</span>
-      </header>
-      <div class="mem-head" style="margin-bottom:6px">
-        <span class="mem-type" style="--dot:#c084fc">friction</span>
+          <canvas id="mri-canvas"></canvas>
+
+          <div class="canvas-overlay-stats">
+            <div>
+              <div class="stat-num" id="stat-memories">148</div>
+              <div class="stat-label">Confirmed Memories</div>
+            </div>
+            <div>
+              <div class="stat-num text-gradient-purple" id="stat-healthy">96.4%</div>
+              <div class="stat-label">Healthy & Fresh</div>
+            </div>
+            <div>
+              <div class="stat-num" id="stat-applied">1,240</div>
+              <div class="stat-label">Times Hydrated</div>
+            </div>
+            <div>
+              <div class="stat-num text-gradient-gold" id="stat-events">142</div>
+              <div class="stat-label">Live Pulses</div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p class="mem-body">Settings focus needed the main window first.</p>
-      <p class="dream-insight">Clicking Settings from the menu-bar popover failed unless the main app window was already focused — fixed with an explicit activation, after being hit twice.</p>
-      <blockquote class="dream-quote">
-        “For some reason clicking settings from the bar menu doesn't open the settings view unless the main app window is already focused.”
-        <cite>verbatim, session c4a1fa9f</cite>
-      </blockquote>
-      <p class="dream-gate">Also that night: 3 draft memories → review inbox. Skills proposed: 0 — the gate requires the same friction in ≥2 distinct sessions, and nothing cleared it.</p>
-      <footer class="mem-meta">
-        <span>8&nbsp;sessions read&nbsp;·&nbsp;gemini-3.5-flash</span>
-        <span>a night with nothing real logs as&nbsp;<em>quiet</em>&nbsp;— never padded</span>
-      </footer>
-    </article>
-    <p class="caveat reveal">A real entry from this repo’s own history — verbatim quote, honest cost line. Dreams are <strong>off by default</strong>; enabling shows the estimate first. One classifier call per project per night under a cap you set, only while the machine is idle on adequate power, and it stops the moment you’re back. Skippable 12-second REM replay included; contradictions render side-by-side with one-tap resolution.</p>
+    </section>
 
-    <figure class="shot reveal">
-      <img src="/media/app/app-dreams.webp" width="1600" height="1127" loading="lazy"
-           alt="The Dream Journal: a night's entry for tweibley/hypermnesia with a consolidation summary and two detected contradictions, each shown as the two conflicting memories side by side with Keep this buttons">
-      <figcaption>The journal itself, on this repository — contradictions render as the two conflicting memories side by side, each with its one-tap resolution. Screenshot, not a mockup.</figcaption>
-    </figure>
-  </section>
+    <!-- LIVE PLAYGROUND WIDGET (DELIGHT FEATURE 1) -->
+    <section class="section" id="playground">
+      <div class="container">
+        <div class="section-title-wrap">
+          <span class="section-tag">Interactive Simulation</span>
+          <h2 class="section-title">See Context Hydration in Action</h2>
+          <p class="section-desc">Select sample prompt scenarios to see how Hypermnesia injects targeted memories vs a memoryless agent guessing blindly.</p>
+        </div>
 
-  <!-- ============ THE APP ============ -->
-  <section id="app" class="section">
-    <p class="kicker reveal">05&nbsp;/&nbsp;The app</p>
-    <h2 class="reveal">Watch it remember</h2>
-    <p class="section-lede reveal">Everything below is a screenshot of Hypermnesia holding <em>this repository’s own memory</em> — 215 typed memories captured from the sessions that built the app. Several were captured live by the session that took these screenshots.</p>
+        <div class="playground-container">
+          <div class="playground-input-side">
+            <span class="playground-label">Select Agent Prompt Scenario:</span>
+            <div class="prompt-picker-list">
+              <button class="prompt-option active" data-preset="auth">
+                <strong>Scenario 1:</strong> "Add profile authentication endpoint"
+              </button>
+              <button class="prompt-option" data-preset="db">
+                <strong>Scenario 2:</strong> "Configure database full-text search"
+              </button>
+              <button class="prompt-option" data-preset="decay">
+                <strong>Scenario 3:</strong> "Implement memory decay thresholds"
+              </button>
+            </div>
 
-    <div class="tour">
-      <figure class="tour-item reveal">
-        <h3>The workbench</h3>
-        <p>Seven types down the sidebar, freshness and belief on every row, provenance one click away. Risky captures wait in the review filter as drafts — 40 of them here — until you confirm; nothing hydrates a session without earning it.</p>
-        <img src="/media/app/app-list.webp" width="1600" height="1000" loading="lazy"
-             alt="Hypermnesia's List view: sidebar with seven memory types and counts, a review filter with 40 drafts, and memory rows each showing type, age, and a freshness state with belief percentage">
-      </figure>
+            <span class="playground-label" style="margin-top: 10px;">Or Type Custom Prompt:</span>
+            <input type="text" class="prompt-custom-input" id="playground-custom-input" placeholder="e.g. Add user session caching layer... (Press Enter)">
+          </div>
 
-      <figure class="tour-item reveal">
-        <h3>The MRI, on live tissue</h3>
-        <p>The replay at the top of this page runs on sample data. This one isn’t — every circle is one of this repo’s memories, sized by confidence and colored by decay, and every pulse is a real inject, recall, or capture firing from a session. The HUD is reading <em>Capture&nbsp;4×&nbsp;·&nbsp;1&nbsp;minute&nbsp;ago</em> — the capture in question being this page’s own work session.</p>
-        <img src="/media/app/app-mri.webp" width="1600" height="1000" loading="lazy"
-             alt="The Brain MRI view live: memories arranged as a brain with fresh, aging, and stale circles, purple pulse lines firing from a central Claude node, session event lanes on the left, and a live timeline at the bottom">
-      </figure>
+          <div class="playground-output-side">
+            <div class="output-comparison-box" id="playground-output-hydrated">
+              <span class="output-tag-hydrated">✓ WITH HYPERMNESIA</span><br>
+              [HYPERMNESIA HYDRATED CONTEXT - 2 Memories Injected]<br>
+              • <span style="color: #c084fc;">[decision]</span> Auth tokens use Ed25519 asymmetric signatures (retired HMAC in v0.2.1)<br>
+              • <span style="color: #a06bff;">[convention]</span> Store local session database in ~/Library/Application Support/Hypermnesia<br><br>
+              <span style="color: #cbd5e1;">Agent Output:</span> "Adding profile auth endpoint. Using Ed25519 token validation per decision #142, placing session storage in standard ~/Library path..."
+            </div>
 
-      <figure class="tour-item reveal">
-        <h3>The constellation</h3>
-        <p>Every memory at once — 232 by this frame, seventeen more than the shots around it, captured in the minutes between screenshots — linked by inferred edges: decisions to the conventions they produced, concerns to the code they guard. Three layouts; this is Constellation.</p>
-        <img src="/media/app/app-graph.webp" width="1600" height="1000" loading="lazy"
-             alt="The Graph view: hundreds of typed memory nodes — decisions, conventions, facts, concerns — connected by faint inferred edges, with a type legend and per-type counts in the sidebar">
-      </figure>
+            <div class="output-comparison-box" id="playground-output-memoryless">
+              <span class="output-tag-memoryless">✕ MEMORYLESS AGENT</span><br>
+              [NO CONTEXT INJECTED]<br><br>
+              <span style="color: #cbd5e1;">Agent Output:</span> "I'll create a standard JWT auth endpoint with HMAC-SHA256 and store state in /tmp/app.db..." <span style="color: #f43f5e;">❌ (Violates project convention & retired HMAC decision)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-      <div class="tour-grid">
-        <figure class="tour-item reveal">
-          <h3>The vitals</h3>
-          <p>Captured vs. confirmed per day, average injectable confidence, and the decay of each day’s cohort — the health of the memory itself, measured.</p>
-          <img src="/media/app/app-trends.webp" width="1600" height="1000" loading="lazy"
-               alt="The Trends view: stat tiles for confirmed share, below-injection-threshold share, and override ratio, above charts of memories captured per day and average injectable confidence">
-        </figure>
-        <figure class="tour-item reveal">
-          <h3>The plain-truth feed</h3>
-          <p>Exactly what happened, when: every injection, recall, and capture — with the memories involved and per-event latency in milliseconds.</p>
-          <img src="/media/app/app-feed.webp" width="1600" height="1000" loading="lazy"
-               alt="The Feed view: a chronological list of injection, capture, and recall events with the memory titles involved, relative timestamps, and millisecond latencies">
-        </figure>
+    <!-- How it works (Autonomous Lifecycle) -->
+    <section class="section" id="how">
+      <div class="container">
+        <div class="section-title-wrap">
+          <span class="section-tag">Continuous Pipeline</span>
+          <h2 class="section-title">How Hypermnesia works</h2>
+          <p class="section-desc">Automatic transcript capture, typed memory extraction, contradiction retirement, and confidence decay keep your agent's context accurate and sharp.</p>
+        </div>
+
+        <div class="pipeline-grid">
+          <div class="pipeline-card">
+            <div class="step-num">01 / CAPTURE</div>
+            <h3 class="step-title">Session Hooks</h3>
+            <p class="step-desc">Editor hooks checkpoint transcript slices without blocking your agent. Out-of-band processing ensures zero session lag.</p>
+          </div>
+
+          <div class="pipeline-card">
+            <div class="step-num">02 / CLASSIFY</div>
+            <h3 class="step-title">Typed Extraction</h3>
+            <p class="step-desc">Pluggable LLM classifier (Gemini 3.5 Flash default, fallback `claude -p`) extracts typed memories: decision, convention, intent, fact, concern.</p>
+          </div>
+
+          <div class="pipeline-card">
+            <div class="step-num">03 / CURATE</div>
+            <h3 class="step-title">Dedup & Contradictions</h3>
+            <p class="step-desc">Jaccard deduplication merges near-duplicates. Newer contradicting captures retire older ones automatically; weak writes land as drafts.</p>
+          </div>
+
+          <div class="pipeline-card">
+            <div class="step-num">04 / DECAY</div>
+            <h3 class="step-title">Graceful Staleness</h3>
+            <p class="step-desc">Memories age through Fresh → Aging → Stale → Dormant unless revalidated by active session usage.</p>
+          </div>
+
+          <div class="pipeline-card">
+            <div class="step-num">05 / HYDRATE</div>
+            <h3 class="step-title">Context Injection</h3>
+            <p class="step-desc">Relevance-ranked, confidence-gated memories are injected into new agent sessions automatically.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Memory Dreams Section -->
+    <section class="section" id="dreams">
+      <div class="container">
+        <div class="section-title-wrap">
+          <span class="section-tag">Overnight Intelligence</span>
+          <h2 class="section-title">Memory Dreams</h2>
+          <p class="section-desc">While your machine sleeps, Hypermnesia reflects across past sessions to mine epiphanies and draft reusable skills.</p>
+        </div>
+
+        <div class="dreams-banner">
+          <div>
+            <h3 class="dreams-title">Overnight Reflection Journal</h3>
+            <p class="dreams-desc">
+              Inspired by overnight learning loops, Memory Dreams consolidates daily agent transcripts while your machine is idle on power. Every entry records exact API calls and cost estimates.
+            </p>
+          </div>
+
+          <ul class="dreams-list" style="list-style: none; display: flex; flex-direction: column; gap: 12px;">
+            <li style="display: flex; gap: 10px;">
+              <span style="color: var(--amber-accent); font-family: var(--mono);">✦</span>
+              <span><strong>Mines Hidden Epiphanies:</strong> Discovers non-obvious architecture patterns across multi-day coding sessions.</span>
+            </li>
+            <li style="display: flex; gap: 10px;">
+              <span style="color: var(--amber-accent); font-family: var(--mono);">✦</span>
+              <span><strong>Drafts Reusable Skills:</strong> Identifies repeated friction and drafts custom skills for your agent.</span>
+            </li>
+            <li style="display: flex; gap: 10px;">
+              <span style="color: var(--amber-accent); font-family: var(--mono);">✦</span>
+              <span><strong>Human Consent & Budget Control:</strong> Off by default. Dreams never auto-confirm memories; drafts land in your inbox for one-tap review.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Multi-Client Setup Section (POLISHED TABS & TERMINAL BOX) -->
+    <section class="section" id="clients">
+      <div class="container">
+        <div class="section-title-wrap">
+          <span class="section-tag">Multi-Client Integration</span>
+          <h2 class="section-title">One-command setup for all your tools</h2>
+          <p class="section-desc">Works across Claude Code, Cursor, Google Antigravity, and any stdio Model Context Protocol client.</p>
+        </div>
+
+        <div class="setup-tabs-container">
+          <div class="tabs-header">
+            <button class="tab-btn active" data-tab="tab-claude" id="tab-btn-claude">Claude Code</button>
+            <button class="tab-btn" data-tab="tab-cursor" id="tab-btn-cursor">Cursor Editor</button>
+            <button class="tab-btn" data-tab="tab-antigravity" id="tab-btn-antigravity">Google Antigravity</button>
+            <button class="tab-btn" data-tab="tab-mcp" id="tab-btn-mcp">Any MCP Client</button>
+          </div>
+
+          <div class="tab-content active" id="tab-claude">
+            <p class="terminal-comment"># One command wires hooks, memory guide, and background drain for Claude Code:</p>
+            <div class="terminal-box">
+              <button class="copy-btn" data-copy-target="term-claude" id="copy-btn-claude">Copy Command</button>
+              <div id="term-claude">
+                <div class="terminal-line"><span class="prompt-symbol">$</span> <span class="terminal-cmd-text">hypermnesia setup --with-mcp</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="tab-cursor">
+            <p class="terminal-comment"># Wire Cursor MCP tools and sessionStart / stop hooks:</p>
+            <div class="terminal-box">
+              <button class="copy-btn" data-copy-target="term-cursor" id="copy-btn-cursor">Copy Commands</button>
+              <div id="term-cursor">
+                <div class="terminal-line"><span class="prompt-symbol">$</span> <span class="terminal-cmd-text">hypermnesia install-cursor-mcp</span></div>
+                <div class="terminal-line"><span class="prompt-symbol">$</span> <span class="terminal-cmd-text">hypermnesia install-cursor-hooks</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="tab-antigravity">
+            <p class="terminal-comment"># Wire Google Antigravity CLI, IDE, and app conversation hooks:</p>
+            <div class="terminal-box">
+              <button class="copy-btn" data-copy-target="term-antigravity" id="copy-btn-antigravity">Copy Commands</button>
+              <div id="term-antigravity">
+                <div class="terminal-line"><span class="prompt-symbol">$</span> <span class="terminal-cmd-text">hypermnesia install-antigravity-mcp</span></div>
+                <div class="terminal-line"><span class="prompt-symbol">$</span> <span class="terminal-cmd-text">hypermnesia install-antigravity-hooks</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="tab-mcp">
+            <p class="terminal-comment"># Add Hypermnesia stdio MCP server to any Model Context Protocol config:</p>
+            <div class="terminal-box">
+              <button class="copy-btn" data-copy-target="term-mcp" id="copy-btn-mcp">Copy Config</button>
+              <div id="term-mcp">
+                <div class="terminal-line"><span class="prompt-symbol">JSON</span> <span class="terminal-cmd-text">{ "mcpServers": { "hypermnesia": { "command": "hypermnesia", "args": ["mcp"] } } }</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Empirical Results Section -->
+    <section class="section" id="results">
+      <div class="container">
+        <div class="section-title-wrap">
+          <span class="section-tag">Measured & Honest</span>
+          <h2 class="section-title">Evaluation Benchmarks</h2>
+          <p class="section-desc">Tested on synthetic tasks and real codebase conventions to measure hydration impact objectively.</p>
+        </div>
+
+        <div class="evals-container">
+          <div class="eval-metrics">
+            <div class="metric-bar-group">
+              <div class="metric-header">
+                <span class="metric-title">Convention Recall (All Tasks)</span>
+                <span class="metric-value">15 / 24 Solved (62.5%)</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" data-width="62.5%" style="width: 0%;"></div>
+              </div>
+              <div class="metric-header" style="margin-top: 4px; font-size: 0.8125rem; color: var(--dim);">
+                <span>Memoryless Baseline: 3 / 24 (12.5%)</span>
+              </div>
+            </div>
+
+            <div class="metric-bar-group">
+              <div class="metric-header">
+                <span class="metric-title">Explicit Requirement Tasks</span>
+                <span class="metric-value">12 / 12 Solved (100%)</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" data-width="100%" style="width: 0%;"></div>
+              </div>
+              <div class="metric-header" style="margin-top: 4px; font-size: 0.8125rem; color: var(--dim);">
+                <span>Memoryless Baseline: 0 / 12 (0%) — Matches Paste-to-Prompt Oracle</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="eval-quote">
+            <p>"Automatic hydration solved 15/24 convention tasks vs 3/24 for memoryless baseline, and 12/12 on explicit requirements. The full harness, raw logs, and cases where memory hurt are committed in evals/RESULTS.md."</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTERACTIVE TERMINAL SIMULATOR (DELIGHT FEATURE 2) -->
+    <section class="section" id="cli">
+      <div class="container">
+        <div class="section-title-wrap">
+          <span class="section-tag">Scriptable Interface</span>
+          <h2 class="section-title">Interactive Terminal Simulator</h2>
+          <p class="section-desc">Click commands below to test real CLI output behavior in real time.</p>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div style="display: flex; gap: 6px;">
+              <span class="dot-btn dot-red"></span>
+              <span class="dot-btn dot-yellow"></span>
+              <span class="dot-btn dot-green"></span>
+            </div>
+            <span class="terminal-title">zsh — hypermnesia cli simulator</span>
+            <span></span>
+          </div>
+
+          <div class="terminal-interactive-body" id="terminal-interactive-body">
+            <!-- Output dynamically rendered -->
+          </div>
+
+          <div class="terminal-quick-cmds">
+            <span style="font-family: var(--mono); font-size: 0.75rem; color: var(--dim); align-self: center;">Try Command:</span>
+            <button class="cmd-chip" data-cmd="doctor">$ hypermnesia doctor</button>
+            <button class="cmd-chip" data-cmd="ask">$ hypermnesia ask "Why SQLite?"</button>
+            <button class="cmd-chip" data-cmd="recall">$ hypermnesia recall "auth token storage"</button>
+            <button class="cmd-chip" data-cmd="backfill">$ hypermnesia backfill --project ~/repo --dry-run</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Accordion Section -->
+    <section class="section" id="faq">
+      <div class="container">
+        <div class="section-title-wrap">
+          <span class="section-tag">Frequently Asked</span>
+          <h2 class="section-title">Questions & Answers</h2>
+        </div>
+
+        <div class="faq-grid">
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Why not just CLAUDE.md?</span>
+              <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="faq-answer">
+              Hypermnesia writes your `CLAUDE.md` — `hypermnesia export --markdown` renders a project's confirmed memory as a committable `MEMORY.md`. The difference is everything around that file: memories decay unless they keep proving useful, carry applied/overridden evidence counters, are retired by newer contradicting captures, and are injected by relevance instead of as one ever-growing preamble. A hand-tended `CLAUDE.md` goes stale silently; here staleness is a first-class, visible state.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Isn't this just RAG?</span>
+              <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="faq-answer">
+              The retrieval part is deliberately boring (FTS5 + embeddings). The interesting parts sit around it: capture is automatic from real sessions; memories are typed (`decision`, `convention`, `intent`), contradictions are detected at capture time; and decay + belief decide whether a memory is still trustworthy, not just similar. On explicit-memory tasks, hydration matched a paste-the-fact-into-the-prompt oracle.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>What data leaves my machine?</span>
+              <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="faq-answer">
+              The database is local SQLite; zero app telemetry. Exactly two things leave your device: transcript slices sent to your configured classifier (Gemini API key or `claude -p`), and stored summaries when using `ask` or `audit --deep`.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>How do Dreams work?</span>
+              <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="faq-answer">
+              Dreams are off by default. Enabling them shows cost estimates first. The budget is capped to one classifier call per project per night while idle on power. Every entry records its estimated cost. Dreams never confirm memories or install skills on their own: drafts go through the review inbox, and skills stage for explicit install with one-tap uninstall.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Does injected memory ever hurt?</span>
+              <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="faq-answer">
+              Measured: yes, once — memory injection broke 1 of 18 adversarial control tasks that the baseline passed. Mitigations are structural: overridden memories lose belief, stale ones fall below the injection floor until revalidated, and risky writes land as drafts for review.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download CTA Banner -->
+    <section class="section" id="download">
+      <div class="container">
+        <div class="cta-banner">
+          <h2 class="cta-title">Upgrade your AI agent's memory today</h2>
+          <p class="cta-desc">Download Hypermnesia for macOS — signed, notarized, universal binary with built-in auto-updater.</p>
+          <a href="https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip" class="btn btn-primary" id="banner-btn-download" style="padding: 14px 32px; font-size: 1.0625rem;">
+            Download Hypermnesia for macOS (.zip)
+          </a>
+          <p style="margin-top: 16px; font-size: 0.8125rem; color: var(--dim); font-family: var(--mono);">v0.3.1&nbsp;·&nbsp;MIT&nbsp;·&nbsp;Requires macOS 14+ (Sonoma or newer) • Universal Apple Silicon & Intel Binary</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="nav-brand" style="margin-bottom: 16px;">
+            <svg class="glyph-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-opacity=".35"/><circle cx="12" cy="12" r="5.5" stroke="currentColor" stroke-opacity=".6"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+            <span>HYPERMNESIA</span>
+          </div>
+          <p style="color: var(--muted); font-size: 0.875rem; max-width: 320px;">
+            A local-first memory system giving Claude Code, Cursor, and Google Antigravity a durable, decaying memory of every project.
+          </p>
+        </div>
+
+        <div>
+          <div class="footer-col-title">Clients</div>
+          <ul class="footer-links">
+            <li><a href="#clients" class="footer-link">Claude Code</a></li>
+            <li><a href="#clients" class="footer-link">Cursor Editor</a></li>
+            <li><a href="#clients" class="footer-link">Google Antigravity</a></li>
+            <li><a href="#clients" class="footer-link">MCP Protocol</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <div class="footer-col-title">Resources</div>
+          <ul class="footer-links">
+            <li><a href="#how" class="footer-link">How It Works</a></li>
+            <li><a href="#dreams" class="footer-link">Memory Dreams</a></li>
+            <li><a href="#results" class="footer-link">Evaluation Harness</a></li>
+            <li><a href="https://github.com/tweibley/hypermnesia" class="footer-link" target="_blank" rel="noopener">GitHub Repository</a></li>
+            <li><a href="https://github.com/tweibley/hypermnesia/blob/main/CHANGELOG.md" class="footer-link" target="_blank" rel="noopener">Changelog&nbsp;·&nbsp;v0.3.1</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <div class="footer-col-title">License & Security</div>
+          <ul class="footer-links">
+            <li><a href="https://github.com/tweibley/hypermnesia/blob/main/LICENSE" class="footer-link" target="_blank" rel="noopener">MIT License</a></li>
+            <li><a href="https://github.com/tweibley/hypermnesia/blob/main/SECURITY.md" class="footer-link" target="_blank" rel="noopener">Threat Model</a></li>
+            <li><a href="https://github.com/tweibley/hypermnesia/blob/main/THIRD-PARTY-LICENSES.md" class="footer-link" target="_blank" rel="noopener">Licenses</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 Hypermnesia Open Source. Distributed under MIT License.</span>
+        <span>Local-first memory engine for AI coding agents. · <a href="https://x.com/themcgruff" class="footer-link" rel="me">@themcgruff</a></span>
       </div>
     </div>
-  </section>
+  </footer>
 
-  <!-- ============ PRIVACY ============ -->
-  <section id="privacy" class="section">
-    <p class="kicker reveal">06&nbsp;/&nbsp;Privacy</p>
-    <h2 class="reveal">Local-first, verifiably</h2>
-    <ul class="manifest">
-      <li class="reveal"><span class="m-key">store</span> <span class="m-val">one SQLite file — <code>~/Library/Application&nbsp;Support/Hypermnesia/memory.db</code></span></li>
-      <li class="reveal"><span class="m-key">telemetry</span> <span class="m-val">none. No accounts, no cloud store.</span></li>
-      <li class="reveal"><span class="m-key">leaves your machine</span> <span class="m-val">exactly two things, both to the classifier <em>you</em> configure: transcript slices for classification, and stored memory summaries plus your question for <code>ask</code>. That’s the whole list — the threat model is in <a href="https://github.com/tweibley/hypermnesia/blob/main/SECURITY.md">SECURITY.md&nbsp;↗</a>.</span></li>
-      <li class="reveal"><span class="m-key">this site</span> <span class="m-val">self-hosted fonts; one third-party request — privacy-friendly <a href="https://posthog.com">PostHog</a> page analytics (no memory content, Do&nbsp;Not&nbsp;Track respected). The app itself still sends nothing.</span></li>
-    </ul>
-  </section>
-
-  <!-- ============ RESULTS ============ -->
-  <section id="results" class="section">
-    <p class="kicker reveal">07&nbsp;/&nbsp;Evals</p>
-    <h2 class="reveal">Measured, honestly</h2>
-    <div class="stats">
-      <div class="stat reveal">
-        <p class="stat-num">3<span>/24</span>&nbsp;→&nbsp;15<span>/24</span></p>
-        <p class="stat-cap">Tasks solved when the required convention exists <em>only in memory</em> — a memoryless agent vs. the same agent with automatic hydration.</p>
-      </div>
-      <div class="stat reveal">
-        <p class="stat-num">12<span>/12</span></p>
-        <p class="stat-cap">On the subset whose memory states the requirement explicitly, hydration matched the paste-it-into-the-prompt oracle.</p>
-      </div>
-      <div class="stat stat-warn reveal">
-        <p class="stat-num">17<span>/18</span></p>
-        <p class="stat-cap">Adversarial control tasks passed with memory injected — the baseline passed 18/18. Yes: injected memory broke one. The failure is committed along with everything else.</p>
-      </div>
-    </div>
-    <p class="caveat reveal">Small&nbsp;n&nbsp;·&nbsp;synthetic tasks&nbsp;·&nbsp;one subject model — the full harness, data, and the cases where memory <em>hurt</em> live in <a href="https://github.com/tweibley/hypermnesia/blob/main/evals/RESULTS.md">evals/RESULTS.md&nbsp;↗</a></p>
-  </section>
-
-  <!-- ============ CLIENTS ============ -->
-  <section id="clients" class="section">
-    <p class="kicker reveal">08&nbsp;/&nbsp;Setup</p>
-    <h2 class="reveal">Three clients, one memory</h2>
-    <p class="section-lede reveal">The same local store, captured from and injected into all three — with <code>recall</code>, <code>ask</code>, and <code>remember</code> available to each agent over MCP.</p>
-    <div class="cards">
-      <article class="card reveal">
-        <h3>Claude Code</h3>
-        <pre><code>hypermnesia setup --with-mcp</code></pre>
-        <p>One command: capture + injection hooks for all projects, plus the MCP pull path. <code>setup --uninstall</code> reverses everything.</p>
-      </article>
-      <article class="card reveal">
-        <h3>Cursor</h3>
-        <pre><code>hypermnesia install-cursor-mcp
-hypermnesia install-cursor-hooks</code></pre>
-        <p>Session-start injection, stop/session-end capture, MCP tools in Cursor’s own approval UI.</p>
-      </article>
-      <article class="card reveal">
-        <h3>Google Antigravity</h3>
-        <pre><code>hypermnesia install-antigravity-mcp
-hypermnesia install-antigravity-hooks</code></pre>
-        <p>App, IDE, and CLI variants — conversation-start injection, capture that never blocks the agent from stopping.</p>
-      </article>
-    </div>
-    <p class="mcp-row reveal">Any other MCP client — Claude Desktop included: <code>{&nbsp;"mcpServers":&nbsp;{&nbsp;"hypermnesia":&nbsp;{&nbsp;"command":&nbsp;"hypermnesia",&nbsp;"args":&nbsp;["mcp"]&nbsp;}&nbsp;}&nbsp;}</code></p>
-    <p class="mcp-row reveal">Don’t wait for new sessions — seed from history: <code>hypermnesia backfill --project ~/some/repo</code> <span class="dim">(add <code>--client cursor</code> or <code>--client antigravity</code>)</span></p>
-  </section>
-
-  <!-- ============ QUICK START ============ -->
-  <section id="start" class="section">
-    <p class="kicker reveal">09&nbsp;/&nbsp;Install</p>
-    <h2 class="reveal">Quick start</h2>
-    <p class="reveal" style="margin:0 0 1rem">
-      <a class="btn btn-primary" href="https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip">⬇&nbsp;&nbsp;Download for macOS</a>
-      <span style="margin-left:.75rem; opacity:.65; font-size:.9em">Universal binary · signed &amp; notarized · macOS&nbsp;14+</span>
-    </p>
-    <p class="reveal" style="opacity:.8">Unzip, drag to Applications, open — the app walks you through setup, no terminal required (the CLI ships inside the app). Prefer the terminal? The bundled CLI does the same work headless:</p>
-    <div class="codeblock reveal">
-      <button class="copy" data-copy>copy</button>
-      <pre><code>alias hypermnesia=/Applications/Hypermnesia.app/Contents/Resources/hypermnesia
-hypermnesia backfill --project ~/some/repo     <span class="cm"># seed memory from past sessions</span>
-hypermnesia setup --with-mcp                   <span class="cm"># hooks + recall/ask/remember</span>
-open -a Hypermnesia</code></pre>
-    </div>
-    <p class="req reveal">Requires macOS&nbsp;14+ and <code>claude</code> on <code>PATH</code>. A <code>GEMINI_API_KEY</code> enables the recommended classifier; without one it falls back to <code>claude&nbsp;-p</code>. <code>hypermnesia&nbsp;doctor</code> verifies the result. Prefer building from source? <a href="https://github.com/tweibley/hypermnesia#build-from-source">The README has you covered</a>.</p>
-  </section>
-
-  <!-- ============ FAQ ============ -->
-  <section id="faq" class="section">
-    <p class="kicker reveal">10&nbsp;/&nbsp;FAQ</p>
-    <h2 class="reveal">Fair questions</h2>
-
-    <details class="reveal">
-      <summary>Why not just CLAUDE.md?</summary>
-      <p>Hypermnesia <em>writes</em> your CLAUDE.md — <code>hypermnesia export --markdown</code> renders a project’s confirmed memory as a committable <code>MEMORY.md</code>, sections, provenance, and all. The difference is everything around that file: memories decay unless they keep proving useful, carry applied/overridden evidence counters, are retired by newer contradicting captures, and are injected by relevance instead of as one ever-growing preamble. A hand-tended CLAUDE.md goes stale silently; here staleness is a first-class, visible state.</p>
-    </details>
-
-    <details class="reveal">
-      <summary>Isn’t this just RAG?</summary>
-      <p>The retrieval part is deliberately boring (FTS5 + embeddings). The interesting parts sit around it: capture is automatic from real sessions; memories are typed, with structure like “does NOT apply to”; contradictions are detected at capture time; and decay + belief decide whether a memory is still <em>trustworthy</em>, not just similar. The evals benchmark against a paste-the-fact-into-the-prompt oracle — on explicit-memory tasks, hydration matched it.</p>
-    </details>
-
-    <details class="reveal">
-      <summary>Does injected memory ever hurt?</summary>
-      <p>Measured: yes, once — memory injection broke 1 of 18 adversarial control tasks that the baseline passed (details, including the failure, in <a href="https://github.com/tweibley/hypermnesia/blob/main/evals/RESULTS.md">evals/</a>). The mitigations are structural: overridden memories lose belief, stale ones fall below the injection floor until revalidated, and risky writes land as drafts you confirm before they hydrate anything.</p>
-    </details>
-
-    <details class="reveal">
-      <summary>Does it slow sessions down or eat tokens?</summary>
-      <p>Hydration injects a small, bounded set: confirmed memories above a confidence floor at session start, and up to 8 relevance-ranked ones per prompt. Capture is asynchronous — hooks checkpoint and return; classification runs out-of-band, so nothing blocks the session. The only recurring spend is classification, on the model you choose.</p>
-    </details>
-
-    <details class="reveal">
-      <summary>Dreams run an LLM over my sessions while I sleep?</summary>
-      <p>Only if you turn them on — Dreams are <strong>off by default</strong>, and enabling shows the cost estimate first. The budget is one classifier call per project per night, under a nightly cap you set; it runs only while the machine is idle on adequate power, and stops the moment you’re back. Every journal entry records its calls and estimated cost. Dreams never confirm memories or install skills on their own: drafts go through the same review inbox as everything else, and skills stage for an explicit install — with a diff before any update, one-tap uninstall, and honest report-backs on whether they were ever used. A night with nothing real to say is logged as <em>quiet</em>, never padded.</p>
-    </details>
-
-    <details class="reveal">
-      <summary>Why macOS-only? Will there be a Linux build?</summary>
-      <p>The engine and CLI are UI-free Swift over GRDB/SQLite — nothing in the capture&nbsp;↔&nbsp;hydrate loop is macOS-specific; the SwiftUI app is. A headless Linux build of the CLI + hooks is plausible; it just isn’t built or tested yet. If that’s what’s blocking you, <a href="https://github.com/tweibley/hypermnesia/issues">open an issue</a>.</p>
-    </details>
-  </section>
-
-  <!-- ============ INVENTORY ============ -->
-  <section id="inventory" class="section">
-    <p class="kicker reveal">11&nbsp;/&nbsp;Inventory</p>
-    <h2 class="reveal">The complete list, for the thorough</h2>
-    <p class="section-lede reveal">Everything above is the argument. This is the manifest — every shipped capability, one line each.</p>
-    <div class="capgrid reveal">
-      <div><b>Typed memories</b><p>Seven types with scope rules (“does NOT apply to”), evidence counters, provenance pinned to commits.</p></div>
-      <div><b>Decay + belief</b><p>Confidence = belief × freshness; staleness is a visible state, and overridden memories lose trust structurally.</p></div>
-      <div><b>Contradiction handling</b><p>Detected at capture, confirm-gated supersede, automatic newer-wins sweep for confirmed pairs, Restore as undo.</p></div>
-      <div><b>Review inbox</b><p>Risky writes land as drafts; keyboard triage, bulk confirm/dismiss, every action undoable for 8 seconds.</p></div>
-      <div><b>Automatic capture</b><p>Incremental, asynchronous hooks for Claude&nbsp;Code, Cursor, and Google&nbsp;Antigravity — nothing blocks a session.</p></div>
-      <div><b>Backfill</b><p>Seed memory from the sessions you’ve already run, consent dialog first — count and cost before anything burns.</p></div>
-      <div><b>Hydration + MCP</b><p>Bounded, relevance-ranked injection at session start and per prompt; <code>recall</code>/<code>ask</code>/<code>remember</code> from any MCP client.</p></div>
-      <div><b>Memory Dreams</b><p>Idle-after-wake consolidation: evidence-backed epiphanies, draft memories, skill proposals, one morning digest.</p></div>
-      <div><b>Skill lifecycle</b><p>Staged SKILL.md preview, install to detected layouts, update-with-diff, one-tap uninstall, usage report-backs.</p></div>
-      <div><b>Brain MRI</b><p>Live replay of real session events over the memory anatomy — plus a night-palette REM replay after a dream.</p></div>
-      <div><b>Five more views</b><p>List, graph (three layouts), health, trends, and a plain-truth activity feed of exactly what happened.</p></div>
-      <div><b>Ask</b><p>Natural-language questions answered from the project’s own confirmed memory, sources cited.</p></div>
-      <div><b>Reality-check audit</b><p>Memories re-verified against the current code — corroboration raises belief, drift flags for review.</p></div>
-      <div><b>MEMORY.md export</b><p><code>export --markdown</code> renders a committable digest; CLAUDE.md conventions import as reviewable drafts.</p></div>
-      <div><b>Notch status</b><p>Live session cards below the notch — agent finished, needs you — one click back to the exact terminal tab.</p></div>
-      <div><b>Everything else</b><p>Menu-bar quick stats, ⌘K quick open, share cards (stats only), <code>doctor</code>, Sparkle auto-update, MIT, no telemetry.</p></div>
-    </div>
-  </section>
-
-  <!-- ============ CLOSER ============ -->
-  <section id="get" class="closer">
-    <h2 class="reveal">Every session you wait, your agent forgets the same things again.</h2>
-    <p class="closer-lede reveal">Install today and it captures this session’s decisions as they happen — and <code>backfill</code> seeds it from the sessions you’ve <em>already</em> run, so you start with memory, not an empty file.</p>
-    <p class="cta-row reveal">
-      <a class="btn btn-primary" href="https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip">⬇&nbsp;&nbsp;Download for macOS</a>
-    </p>
-    <p class="closer-trust reveal">free &amp; MIT-licensed&nbsp;·&nbsp;runs entirely on-device, no telemetry&nbsp;·&nbsp;<code>setup --uninstall</code> reverses everything</p>
-  </section>
-
-</main>
-
-<footer class="site-footer">
-  <p class="foot-def"><strong>hypermnesia</strong> <i>(n.)</i> — unusually vivid or complete memory.</p>
-  <nav aria-label="Footer">
-    <a href="https://github.com/tweibley/hypermnesia">GitHub</a>
-    <a href="https://github.com/tweibley/hypermnesia/blob/main/SECURITY.md">Security</a>
-    <a href="https://github.com/tweibley/hypermnesia/blob/main/LICENSE">MIT License</a>
-    <a href="https://github.com/tweibley/hypermnesia/blob/main/CHANGELOG.md">Changelog&nbsp;·&nbsp;v0.3.0</a>
-    <a href="https://x.com/themcgruff" rel="me">@themcgruff</a>
-  </nav>
-  <p class="foot-note">Built for Claude&nbsp;Code, Cursor&nbsp;&amp; Google&nbsp;Antigravity. Everything stays on your machine.</p>
-</footer>
-
-<script>
-(function () {
-  var io = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
-    });
-  }, { rootMargin: '0px 0px -8% 0px' });
-  document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
-
-  document.querySelectorAll('[data-copy]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var code = btn.parentElement.querySelector('code');
-      navigator.clipboard.writeText(code.innerText).then(function () {
-        btn.textContent = 'copied';
-        setTimeout(function () { btn.textContent = 'copy'; }, 1600);
-      });
-    });
-  });
-})();
-</script>
+  <script src="/app.js"></script>
 </body>
 </html>
