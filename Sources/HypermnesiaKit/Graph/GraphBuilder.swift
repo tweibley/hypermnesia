@@ -6,8 +6,12 @@ import Foundation
 public enum GraphBuilder {
 
     /// Derive edges for a set of memory nodes. `fanout` bounds how many same-file links each node
-    /// makes, to keep the graph readable.
-    public static func inferEdges(_ nodes: [MemoryNode], fanout: Int = 3) -> [MemoryEdge] {
+    /// makes, to keep the graph readable. `includeSessionChains` controls the same-session recency
+    /// chain (step 3): on large graphs those chronological `relatedTo` links crisscross the
+    /// semantic clusters, so dense views pass `false` to show lineage/file structure only.
+    public static func inferEdges(
+        _ nodes: [MemoryNode], fanout: Int = 3, includeSessionChains: Bool = true
+    ) -> [MemoryEdge] {
         let present = Set(nodes.map(\.id))
         let projectId = nodes.first?.projectId ?? ""
         var edges: [String: MemoryEdge] = [:]   // keyed by edge.id for dedupe
@@ -77,6 +81,7 @@ public enum GraphBuilder {
         }
 
         // 3. Same session — a recency chain (not a dense clique).
+        guard includeSessionChains else { return Array(edges.values) }
         var bySession: [String: [MemoryNode]] = [:]
         for node in nodes {
             if let convo = node.conversationId { bySession[convo, default: []].append(node) }

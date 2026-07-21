@@ -48,6 +48,18 @@ struct GraphTests {
         #expect(edges.count == 2)   // a-b, b-c (chain), not 3 (clique)
     }
 
+    @Test("session chains can be excluded while lineage and file edges remain")
+    func sessionChainsExcluded() {
+        let edges = GraphBuilder.inferEdges([
+            node("a", .fact, conversation: "s1"),
+            node("b", .fact, conversation: "s1"),
+            node("old", .decision, files: ["x.swift"], conversation: "s1", supersededBy: "new"),
+            node("new", .decision, files: ["x.swift"], conversation: "s1"),
+        ], includeSessionChains: false)
+        #expect(edges.contains { $0.relationship == .supersedes })
+        #expect(edges.contains { $0.source == "a" || $0.target == "a" } == false)
+    }
+
     @Test("shared-file edges involving codeRefs are typed")
     func codeRefEdges() {
         let edges = GraphBuilder.inferEdges([
