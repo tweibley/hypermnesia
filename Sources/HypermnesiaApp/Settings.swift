@@ -13,6 +13,9 @@ final class SettingsModel {
         case missingClaudeCLI
         case notRegistered
         case registeredDisconnected
+        /// Registered in `~/.claude.json`, but the live `claude mcp list` health check failed or
+        /// timed out (it probes every configured server, so one slow/wedged server sinks it).
+        case registeredUnverified
         case connected
         case error
     }
@@ -52,7 +55,7 @@ final class SettingsModel {
     var recallPathInstalled: Bool { recallGuideInstalled && recallPermissionsInstalled }
     var mcpServerRegistered: Bool {
         switch mcpServerState {
-        case .connected, .registeredDisconnected: true
+        case .connected, .registeredDisconnected, .registeredUnverified: true
         default: false
         }
     }
@@ -69,6 +72,7 @@ final class SettingsModel {
         case .missingClaudeCLI: "`claude` CLI not found on PATH"
         case .notRegistered: "Not registered"
         case .registeredDisconnected: "Registered, not connected"
+        case .registeredUnverified: "Registered — connection check timed out (another MCP server responded slowly)"
         case .connected: "Registered and connected"
         case .error: "Could not read MCP server list"
         }
@@ -221,7 +225,7 @@ final class SettingsModel {
                 Self.detectMCPServerState(claudeCLI: claudeCLI)
             }.value
             self.mcpServerState = state
-            if state == .connected || state == .registeredDisconnected {
+            if state == .connected || state == .registeredDisconnected || state == .registeredUnverified {
                 self.statusMessage = "MCP server registered: hypermnesia"
             } else if add.succeeded {
                 self.statusMessage = "Registration command succeeded, but server was not found in `claude mcp list`."
@@ -377,7 +381,13 @@ final class SettingsModel {
 
     nonisolated private static func detectMCPServerState(claudeCLI: String) -> MCPServerState {
         let list = Shell.run(claudeCLI, ["mcp", "list"], timeout: 20)
-        guard list.succeeded else { return .error }
+        guard list.succeeded else {
+            // `claude mcp list` live-probes every configured server (project + plugin scopes too),
+            // so one slow server — or a cold `npx …@latest` fetch — times the whole command out.
+            // Fall back to the user-scope registration record so a successful `mcp add` isn't
+            // reported as "Could not read MCP server list".
+            return isRegisteredInUserScope() ? .registeredUnverified : .error
+        }
         let output = list.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !output.isEmpty else { return .notRegistered }
         let lines = output.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) }
@@ -385,6 +395,17 @@ final class SettingsModel {
             return .notRegistered
         }
         return line.contains("✔ Connected") ? .connected : .registeredDisconnected
+    }
+
+    /// Whether `hypermnesia` is registered at user scope. Read-only peek at `~/.claude.json` —
+    /// Claude Code's own state file, which we deliberately never write (see `ClaudeMCPInstaller`).
+    nonisolated private static func isRegisteredInUserScope() -> Bool {
+        let path = NSString(string: "~/.claude.json").expandingTildeInPath
+        guard let data = FileManager.default.contents(atPath: path),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let servers = json["mcpServers"] as? [String: Any]
+        else { return false }
+        return servers[ClaudeMCPInstaller.server] != nil
     }
 
     func testConnection() {
