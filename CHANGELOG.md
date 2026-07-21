@@ -5,6 +5,29 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-07-21
+
+### Fixed
+
+- **Screenshot mode no longer starves hidden projects.** The `HYPERMNESIA_HIDE_PROJECTS` filter
+  had leaked into the storage layer, so background ingest re-triage and daily maintenance silently
+  skipped hidden projects while the env var was set. The store now separates truth
+  (`allProjects()`) from presentation (`visibleProjects()`): data-integrity work always sees every
+  project; only user-facing surfaces (sidebar, badge, ⌘K, dreams) apply the hide filter.
+- **Release automation:** every release now deploys the site with the tagged version
+  automatically; the deploy is a reusable, manually-dispatchable workflow
+  (`gh workflow run deploy-site.yml`), pinned to wrangler 4 (v3 can't deploy assets-only
+  Workers).
+
+### Changed
+
+- **Internal restructuring (no behavior changes beyond the fix above).** Classifier-captured file
+  paths are normalized to repo-relative at capture, matching code refs; codeRef lifecycle policy
+  is expressed as `MemoryType` capabilities instead of scattered type checks; the reality-check
+  audit is read-only, with rename-repair an explicit prior step; the Settings model moved to its
+  own file with MCP registration detection relocated into the kit; the three per-client hook
+  installers share one binary-health protocol.
+
 ## [0.3.0] — 2026-07-20
 
 ### Added
