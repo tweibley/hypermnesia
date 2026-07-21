@@ -5,6 +5,15 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-07-21
+
+### Changed
+
+- **Marketing site redesign.** hypermnesia.app rebuilt with an interactive memory playground,
+  CLI simulator, FAQ accordion, and live memory-graph visualization. Fonts remain self-hosted
+  and analytics unchanged; no external requests were added. App behavior is unchanged — this
+  release exists to ship the site with a matching version.
+
 ## [0.3.1] — 2026-07-21
 
 ### Fixed
