@@ -29,3 +29,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: site
+          # The action's default wrangler (3.x) predates assets-only Workers and fails with
+          # "Missing entry-point"; the site's wrangler.jsonc needs wrangler 4.
+          wranglerVersion: "4.112.0"
