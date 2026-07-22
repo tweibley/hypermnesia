@@ -265,7 +265,7 @@ struct IncrementalCaptureTests {
             cwd: "/repo", gitSha: nil, gitBranch: nil, isFinal: true)
 
         let report = await SessionIngestor.drainQueue(
-            store: store, classifier: MockClassifier(), limit: 10)
+            store: store, classifier: MockClassifier(), limit: 10, lockDirectory: support)
         #expect(report.failures == 1)
 
         let health = try store.captureQueueHealth()

@@ -304,16 +304,19 @@ public enum SessionIngestor {
 
     /// Drain the capture queue: classify each pending session (incrementally) into memories.
     /// Coordinated by an advisory file lock so the app and the CLI never drain at the same time —
-    /// returns `.idle` immediately if another drainer holds the lock.
+    /// returns `.idle` immediately if another drainer holds the lock. `lockDirectory` is a test
+    /// seam: tests must pass their own directory so a drain running on the real support dir
+    /// (the installed app) can't turn their drain into a no-op.
     @discardableResult
     public static func drainQueue(
         store: MemoryStore,
         classifier: Classifier,
         limit: Int = 100,
+        lockDirectory: URL = StoreLocation.supportDirectory,
         progress: (@Sendable (_ processed: Int, _ total: Int, _ addedSoFar: Int) -> Void)? = nil
     ) async -> DrainReport {
-        try? FileManager.default.createDirectory(at: StoreLocation.supportDirectory, withIntermediateDirectories: true)
-        let lockPath = StoreLocation.supportDirectory.appendingPathComponent("drain.lock").path
+        try? FileManager.default.createDirectory(at: lockDirectory, withIntermediateDirectories: true)
+        let lockPath = lockDirectory.appendingPathComponent("drain.lock").path
         let fd = open(lockPath, O_CREAT | O_RDWR, 0o644)
         guard fd >= 0, flock(fd, LOCK_EX | LOCK_NB) == 0 else { if fd >= 0 { close(fd) }; return .idle }
         defer { flock(fd, LOCK_UN); close(fd) }
