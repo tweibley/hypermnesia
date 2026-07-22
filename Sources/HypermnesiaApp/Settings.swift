@@ -119,6 +119,31 @@ private struct SectionHeader: View {
 private struct OnboardingSettings: View {
     @Bindable var model: SettingsModel
 
+    private var cliToolDetail: String {
+        switch model.cliToolState {
+        case .checking:
+            return "Checking…"
+        case .onPATH:
+            return "`hypermnesia` works in Terminal."
+        case .linkedNotOnPATH:
+            return "Linked in ~/.local/bin, but that folder isn't on your PATH. Install in /usr/local/bin (asks for your admin password once) — or add ~/.local/bin to PATH in your shell profile yourself."
+        case .userManaged:
+            return "You manage your own `hypermnesia` install — leaving it untouched."
+        case .notInstalled:
+            return "Not linked — terminal commands like `hypermnesia setup` won't be found."
+        case .unavailable:
+            return "No bundled CLI in this dev build — symlink .build/debug/hypermnesia manually (see README)."
+        }
+    }
+
+    private var cliToolActionTitle: String? {
+        switch model.cliToolState {
+        case .notInstalled: "Install"
+        case .linkedNotOnPATH: "Install in /usr/local/bin…"
+        default: nil
+        }
+    }
+
     var body: some View {
         SectionHeader(
             title: "Onboarding checklist",
@@ -138,6 +163,20 @@ private struct OnboardingSettings: View {
                     actionTitle: model.hooksBinaryMissing ? "Reinstall" : "Install",
                     optional: false
                 ) { model.setHooks(true) }
+
+                setupRow(
+                    title: "Terminal command",
+                    detail: cliToolDetail,
+                    done: model.cliToolState == .onPATH || model.cliToolState == .userManaged,
+                    actionTitle: cliToolActionTitle,
+                    optional: false
+                ) {
+                    if model.cliToolState == .linkedNotOnPATH {
+                        model.installCLIToolSystemWide()
+                    } else {
+                        model.installCLITool()
+                    }
+                }
 
                 setupRow(
                     title: "Launch at login",

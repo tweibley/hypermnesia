@@ -51,6 +51,20 @@ final class SettingsModel {
     var statusMessage: String?
     var configPersistenceError: String?
 
+    enum CLIToolState: Equatable {
+        case checking
+        /// Symlinked and `hypermnesia` resolves in a login shell — documented commands work.
+        case onPATH
+        /// Symlinked into ~/.local/bin, but that directory isn't on the user's PATH.
+        case linkedNotOnPATH
+        /// The user manages their own install (from-source symlink or real file) — leave it be.
+        case userManaged
+        case notInstalled
+        /// No bundled CLI next to this executable (bare SwiftPM dev run) — nothing to link.
+        case unavailable
+    }
+    var cliToolState: CLIToolState = .checking
+
     var recallPathInstalled: Bool { recallGuideInstalled && recallPermissionsInstalled }
     var mcpServerRegistered: Bool {
         switch mcpServerState {
@@ -330,6 +344,82 @@ final class SettingsModel {
             || antigravityHooksBinaryMissing
         launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
         refreshMCPServerStatus()
+        refreshCLIToolStatus()
+    }
+
+    /// The CLI bundled inside this .app, or nil for a bare SwiftPM dev run.
+    nonisolated private static func bundledCLIPath() -> String? {
+        guard let bundled = Bundle.main.resourceURL?.appendingPathComponent("hypermnesia").path,
+              FileManager.default.isExecutableFile(atPath: bundled) else { return nil }
+        return bundled
+    }
+
+    /// Symlink state is a cheap filesystem read, but the PATH check shells out to a login
+    /// shell — so the whole probe runs detached, mirroring `refreshMCPServerStatus`.
+    private func refreshCLIToolStatus() {
+        cliToolState = .checking
+        Task { [weak self] in
+            let state = await Task.detached { () -> CLIToolState in
+                guard let bundled = Self.bundledCLIPath() else { return .unavailable }
+                switch CLIToolInstaller.status(bundledPath: bundled) {
+                case .userManaged: return .userManaged
+                case .notInstalled, .stale: return .notInstalled
+                case .current:
+                    return CLIToolInstaller.isOnLoginShellPATH() ? .onPATH : .linkedNotOnPATH
+                }
+            }.value
+            self?.cliToolState = state
+        }
+    }
+
+    /// Symlink the bundled CLI into ~/.local/bin so the documented terminal commands work.
+    func installCLITool() {
+        guard let bundled = Self.bundledCLIPath() else {
+            statusMessage = "No bundled CLI found — dev builds are linked manually (see README)."
+            return
+        }
+        do {
+            try CLIToolInstaller.install(bundledPath: bundled)
+            statusMessage = "Linked \(CLIToolInstaller.linkURL().path) → bundled CLI."
+            refreshCLIToolStatus()
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    /// VS Code-style PATH install: create /usr/local/bin/hypermnesia via a macOS administrator
+    /// prompt, for users whose shell PATH lacks ~/.local/bin. The system link points at the
+    /// ~/.local/bin link (which the app refreshes each launch), so this only ever prompts once.
+    func installCLIToolSystemWide() {
+        guard let bundled = Self.bundledCLIPath() else {
+            statusMessage = "No bundled CLI found — dev builds are linked manually (see README)."
+            return
+        }
+        statusMessage = "Waiting for administrator approval…"
+        Task { [weak self] in
+            let failure = await Task.detached { () -> String? in
+                do {
+                    // The system link chains through the user link — make sure it exists first.
+                    try CLIToolInstaller.install(bundledPath: bundled)
+                } catch {
+                    return error.localizedDescription
+                }
+                // AppleScript string literal: escape backslashes, then quotes.
+                let shellCommand = CLIToolInstaller.systemWideInstallCommand()
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                let script = "do shell script \"\(shellCommand)\" with administrator privileges"
+                let result = Shell.run("/usr/bin/osascript", ["-e", script], timeout: 180)
+                if result.succeeded { return nil }
+                // -128 = the user dismissed the password dialog; not an error worth alarming over.
+                return result.stderr.contains("-128")
+                    ? "Installation canceled."
+                    : "Couldn't create \(CLIToolInstaller.systemLinkPath): \(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))"
+            }.value
+            guard let self else { return }
+            self.statusMessage = failure ?? "Installed \(CLIToolInstaller.systemLinkPath) — `hypermnesia` now works in any terminal."
+            self.refreshCLIToolStatus()
+        }
     }
 
     /// Re-run every installed client's hook install so old configs pick up the notch status

@@ -74,6 +74,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if ProcessInfo.processInfo.environment["HYPERMNESIA_SHARE_PREVIEW_DIR"] == nil {
             NotchStatusController.shared.start()
         }
+        // Keep `hypermnesia` working in Terminal for downloaded installs: the CLI ships inside
+        // the bundle, so symlink it into ~/.local/bin on every launch. Refreshing each launch
+        // also re-points the link after an update or an app move (a stale target would break
+        // every documented `hypermnesia install-…` command). Skips user-managed installs.
+        if Bundle.main.bundlePath.hasSuffix(".app"),
+           let bundled = Bundle.main.resourceURL?.appendingPathComponent("hypermnesia").path,
+           FileManager.default.isExecutableFile(atPath: bundled) {
+            try? CLIToolInstaller.install(bundledPath: bundled)
+        }
         // Clicking the dream digest routes into the Dream Journal (bare SwiftPM runs have no
         // bundle identity, so UNUserNotificationCenter is only touched from a real .app).
         if Bundle.main.bundleIdentifier != nil {

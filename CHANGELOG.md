@@ -5,6 +5,22 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-07-21
+
+### Added
+
+- **The `hypermnesia` terminal command now works out of the box.** Downloaded installs ship the
+  CLI inside the app bundle, but nothing ever put it on PATH — so every documented command
+  (`hypermnesia setup`, `install-cursor-mcp`, `install-antigravity-mcp`, …) failed with "command
+  not found". The app now links the bundled CLI to `~/.local/bin/hypermnesia` on every launch,
+  which also re-points the link after updates or app moves and never touches a from-source
+  install it didn't create.
+- **One-click PATH install for shells without `~/.local/bin`.** A new "Terminal command" row in
+  Settings → Onboarding shows whether `hypermnesia` resolves in your shell; if `~/.local/bin`
+  isn't on your PATH, it offers a VS Code-style install into `/usr/local/bin` behind the standard
+  macOS administrator prompt. The system link chains through the `~/.local/bin` link, so the
+  password prompt happens at most once, ever.
+
 ## [0.3.2] — 2026-07-21
 
 ### Changed

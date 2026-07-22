@@ -74,8 +74,11 @@ memory. Cards carry corpus stats only — never memory content.</sub></p>
 
 **[Download for macOS](https://github.com/tweibley/hypermnesia/releases/latest/download/Hypermnesia.zip)**
 (universal, signed & notarized) — unzip, drag to Applications, open; the app walks you through
-setup and ships its CLI inside the bundle. Installs keep themselves current via the built-in
-auto-updater.
+setup and ships its CLI inside the bundle. On launch it links that CLI to
+`~/.local/bin/hypermnesia`, so the `hypermnesia` terminal command works right away (if
+`~/.local/bin` isn't on your PATH, Settings → Onboarding offers a one-click install into
+`/usr/local/bin`, VS Code style — asks for your admin password once).
+Installs keep themselves current via the built-in auto-updater.
 
 Then jump to `hypermnesia setup` below.
 

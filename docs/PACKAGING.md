@@ -73,7 +73,13 @@ How the pieces fit:
   HTTPS (Gemini) and spawning subprocesses are allowed by default.
 - The CLI (`hypermnesia`) is **bundled inside the app** at `Contents/Resources/hypermnesia`, so one
   artifact ships both the app and the CLI (hooks and `hypermnesia setup` resolve it from the
-  bundle). For a from-source install, symlink `~/.local/bin/hypermnesia` to
-  `.build/release/hypermnesia` instead.
+  bundle). On every launch the app refreshes a `~/.local/bin/hypermnesia` symlink to the bundled
+  binary (`CLIToolInstaller`), which is what makes the documented terminal commands work for
+  downloaded installs — and re-points the link after updates or app moves. If `~/.local/bin`
+  isn't on the user's PATH, Settings offers a VS Code-style admin-prompted symlink at
+  `/usr/local/bin/hypermnesia`; it points at the `~/.local/bin` link (not the bundle), so the
+  root-owned system link never goes stale and the password prompt happens at most once. For a
+  from-source install, symlink `~/.local/bin/hypermnesia` to `.build/release/hypermnesia`
+  instead (the app never clobbers a link it didn't make).
 - `release.sh` builds a **universal** binary (arm64 + x86_64) by default so one download covers both
   Apple Silicon and Intel. Set `UNIVERSAL=0` for a faster native-only local build.
