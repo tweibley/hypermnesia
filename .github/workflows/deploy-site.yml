@@ -25,10 +25,10 @@ jobs:
         run: bash Scripts/sync-site-version.sh
 
       - name: Deploy site to Cloudflare
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: site
-          # The action's default wrangler (3.x) predates assets-only Workers and fails with
-          # "Missing entry-point"; the site's wrangler.jsonc needs wrangler 4.
+          # v4 of the action defaults to wrangler v4 ("latest"); keep the explicit pin so
+          # deploys stay deterministic. Must stay >= 4 for assets-only Workers.
           wranglerVersion: "4.112.0"
