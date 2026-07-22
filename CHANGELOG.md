@@ -5,6 +5,21 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-22
+
+### Added
+
+- **Antigravity's `agy` CLI is now a classifier backend.** If you use Google Antigravity, sessions
+  can be classified through `agy --print` on your existing Google sign-in — no separate
+  `GEMINI_API_KEY` needed, the same way `claude -p` rides your Claude subscription. Select it
+  explicitly (Settings → Classifier → "Antigravity (agy)", or `--classifier antigravity` on
+  `drain`/`backfill`/`classify`), or let **Automatic** find it: auto now resolves Gemini key →
+  `claude` CLI → `agy` CLI, so existing setups are unchanged and `agy` only steps in when nothing
+  else is available. Natural-language `ask` and Memory Dreams run on it too, a new
+  "Antigravity model" field in Settings picks the `agy models` name (default
+  `gemini-3.6-flash-medium`), and `hypermnesia doctor` now checks for whichever CLI your effective
+  classifier actually uses.
+
 ## [0.4.0] — 2026-07-21
 
 ### Added
