@@ -156,38 +156,69 @@ public enum ClassifierJSON {
     }
 }
 
-/// Selects a classifier adapter. Defaults to Gemini when `GEMINI_API_KEY` is set (higher quality),
-/// otherwise the `claude -p` headless adapter.
-public enum Classifiers {
-    public enum Kind: String, CaseIterable, Sendable { case auto, gemini, claude }
+/// Throwaway working directory for CLI classifier subprocesses (`claude -p`, `agy --print`). Both
+/// CLIs record their own session transcript, which Hypermnesia would happily re-ingest on the next
+/// backfill — a self-feeding loop that re-extracts duplicate memories and spawns ever more
+/// classifier transcripts. Running from a temp dir breaks the attribution in both dialects:
+/// `ClaudeCodeSessions.isEphemeral` filters temp-dir cwds, and `AntigravitySessions.firstCwd`
+/// can only attribute a conversation whose tool calls carry a real project directory.
+public enum ClassifierWorkdir {
+    public static let path: String = {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("hypermnesia-classifier", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.path
+    }()
+}
 
-    public static func make(_ kind: Kind = .auto, model: String? = nil) -> Classifier {
+/// Every classifier adapter also answers free-form (`Completer`) and JSON (`DreamCompleter`)
+/// completions, so one selection covers classification, NL query, and dreams.
+public typealias ClassifierEngine = Classifier & Completer & DreamCompleter
+
+/// Selects a classifier adapter. `.auto` prefers Gemini when a key is available (higher quality),
+/// then the `claude` CLI, then Antigravity's `agy` CLI — the last two run on the user's existing
+/// subscription sign-in, no separate API key needed.
+public enum Classifiers {
+    public enum Kind: String, CaseIterable, Sendable { case auto, gemini, claude, antigravity }
+
+    /// The single construction point every selection path funnels through (app, hooks, CLI, NL
+    /// query, dreams) — adding an adapter means extending this switch, not re-scattering branches.
+    static func engine(
+        _ kind: Kind, config: AppConfig, model: String? = nil, timeout: TimeInterval = 120
+    ) -> any ClassifierEngine {
         switch kind {
         case .gemini:
-            return GeminiClassifier(apiKey: geminiKey ?? "", model: model ?? GeminiClassifier.defaultModel)
+            return GeminiClassifier(
+                apiKey: AppConfigStore.resolvedGeminiKey(config) ?? "",
+                model: model ?? config.geminiModel, timeout: timeout)
         case .claude:
-            return ClaudeHeadlessClassifier(claudePath: CLIPath.claude(), model: model ?? ClaudeHeadlessClassifier.defaultModel)
+            return ClaudeHeadlessClassifier(
+                claudePath: CLIPath.claude(), model: model ?? config.claudeModel, timeout: timeout)
+        case .antigravity:
+            return AntigravityClassifier(
+                agyPath: CLIPath.agy(), model: model ?? config.antigravityModel, timeout: timeout)
         case .auto:
-            if let key = geminiKey {
-                return GeminiClassifier(apiKey: key, model: model ?? GeminiClassifier.defaultModel)
-            }
-            return ClaudeHeadlessClassifier(claudePath: CLIPath.claude(), model: model ?? ClaudeHeadlessClassifier.defaultModel)
+            return engine(autoKind(config), config: config, model: model, timeout: timeout)
         }
+    }
+
+    /// What `.auto` resolves to right now: Gemini when a key is available, else `claude` when
+    /// installed, else `agy` when installed. Falls back to `.claude` when nothing is found so the
+    /// failure surfaces as the familiar "claude missing" diagnostic downstream.
+    public static func autoKind(_ config: AppConfig = AppConfigStore.loadBestEffort()) -> Kind {
+        if AppConfigStore.resolvedGeminiKey(config) != nil { return .gemini }
+        if CLIPath.findClaude() != nil { return .claude }
+        if CLIPath.findAgy() != nil { return .antigravity }
+        return .claude
+    }
+
+    public static func make(_ kind: Kind = .auto, model: String? = nil) -> Classifier {
+        engine(kind, config: AppConfig(), model: model)
     }
 
     /// Build the classifier from saved configuration (the default path for the app + hooks).
     public static func makeFromConfig(_ config: AppConfig = AppConfigStore.loadBestEffort()) -> Classifier {
-        switch Kind(rawValue: config.classifier) ?? .auto {
-        case .gemini:
-            return GeminiClassifier(apiKey: AppConfigStore.resolvedGeminiKey(config) ?? "", model: config.geminiModel)
-        case .claude:
-            return ClaudeHeadlessClassifier(claudePath: CLIPath.claude(), model: config.claudeModel)
-        case .auto:
-            if let key = AppConfigStore.resolvedGeminiKey(config) {
-                return GeminiClassifier(apiKey: key, model: config.geminiModel)
-            }
-            return ClaudeHeadlessClassifier(claudePath: CLIPath.claude(), model: config.claudeModel)
-        }
+        engine(Kind(rawValue: config.classifier) ?? .auto, config: config)
     }
 
     /// Resolve a classifier for a CLI command. An explicit `--classifier`/`--model` overrides the
@@ -196,41 +227,27 @@ public enum Classifiers {
     public static func forCLI(
         classifier flag: String?, model: String?, config: AppConfig = AppConfigStore.loadBestEffort()
     ) -> Classifier {
-        let kind = flag.flatMap { Kind(rawValue: $0) } ?? Kind(rawValue: config.classifier) ?? .auto
-        switch kind {
-        case .gemini:
-            return GeminiClassifier(apiKey: AppConfigStore.resolvedGeminiKey(config) ?? "", model: model ?? config.geminiModel)
-        case .claude:
-            return ClaudeHeadlessClassifier(claudePath: CLIPath.claude(), model: model ?? config.claudeModel)
-        case .auto:
-            if let key = AppConfigStore.resolvedGeminiKey(config) {
-                return GeminiClassifier(apiKey: key, model: model ?? config.geminiModel)
-            }
-            return ClaudeHeadlessClassifier(claudePath: CLIPath.claude(), model: model ?? config.claudeModel)
-        }
+        engine(kind(flag: flag, config: config), config: config, model: model)
     }
 
     /// What `forCLI` will resolve to, for progress output.
     public static func cliDescription(classifier flag: String?, config: AppConfig = AppConfigStore.loadBestEffort()) -> String {
-        let kind = flag.flatMap { Kind(rawValue: $0) } ?? Kind(rawValue: config.classifier) ?? .auto
-        switch kind {
+        var resolved = kind(flag: flag, config: config)
+        if resolved == .auto { resolved = autoKind(config) }
+        switch resolved {
         case .gemini: return "gemini (\(config.geminiModel))"
         case .claude: return "claude (\(config.claudeModel))"
-        case .auto:
-            return AppConfigStore.resolvedGeminiKey(config) != nil
-                ? "gemini (\(config.geminiModel))" : "claude (\(config.claudeModel))"
+        case .antigravity: return "antigravity (\(config.antigravityModel))"
+        case .auto: return "auto"   // unreachable — autoKind never returns .auto
         }
     }
 
-    static var geminiKey: String? {
-        let key = ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
-        return (key?.isEmpty == false) ? key : nil
+    private static func kind(flag: String?, config: AppConfig) -> Kind {
+        flag.flatMap { Kind(rawValue: $0) } ?? Kind(rawValue: config.classifier) ?? .auto
     }
 
     /// Human-readable description of what `.auto` resolves to right now.
     public static var autoDescription: String {
-        geminiKey != nil
-            ? "gemini (\(GeminiClassifier.defaultModel))"
-            : "claude (\(ClaudeHeadlessClassifier.defaultModel))"
+        cliDescription(classifier: Kind.auto.rawValue)
     }
 }

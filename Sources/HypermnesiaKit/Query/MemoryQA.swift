@@ -9,17 +9,7 @@ public protocol Completer: Sendable {
 /// Picks a `Completer` from saved configuration (mirrors `Classifiers.makeFromConfig`).
 public enum Completers {
     public static func makeFromConfig(_ config: AppConfig = AppConfigStore.loadBestEffort()) -> Completer {
-        switch Classifiers.Kind(rawValue: config.classifier) ?? .auto {
-        case .gemini:
-            return GeminiClassifier(apiKey: AppConfigStore.resolvedGeminiKey(config) ?? "", model: config.geminiModel)
-        case .claude:
-            return ClaudeHeadlessClassifier(claudePath: CLIPath.claude(), model: config.claudeModel)
-        case .auto:
-            if let key = AppConfigStore.resolvedGeminiKey(config) {
-                return GeminiClassifier(apiKey: key, model: config.geminiModel)
-            }
-            return ClaudeHeadlessClassifier(claudePath: CLIPath.claude(), model: config.claudeModel)
-        }
+        Classifiers.engine(Classifiers.Kind(rawValue: config.classifier) ?? .auto, config: config)
     }
 }
 

@@ -6,7 +6,7 @@ import HypermnesiaKit
 /// run a classifier the user didn't ask for).
 func validateClassifierFlag(_ raw: String?) throws {
     if let raw, Classifiers.Kind(rawValue: raw) == nil {
-        throw ValidationError("Unknown --classifier '\(raw)'. Use one of: auto | gemini | claude.")
+        throw ValidationError("Unknown --classifier '\(raw)'. Use one of: auto | gemini | claude | antigravity.")
     }
 }
 
@@ -705,7 +705,7 @@ struct Drain: AsyncParsableCommand {
         abstract: "Classify queued sessions into memories."
     )
 
-    @Option(name: .long, help: "Classifier: auto | gemini | claude (default: from app settings).")
+    @Option(name: .long, help: "Classifier: auto | gemini | claude | antigravity (default: from app settings).")
     var classifier: String?
 
     @Option(name: .long, help: "Model override.")
@@ -1091,7 +1091,7 @@ struct Backfill: AsyncParsableCommand {
     @Option(name: .long, help: "Only process the most recent N unprocessed sessions.")
     var limit: Int?
 
-    @Option(name: .long, help: "Classifier: auto | gemini | claude (default: from app settings).")
+    @Option(name: .long, help: "Classifier: auto | gemini | claude | antigravity (default: from app settings).")
     var classifier: String?
 
     @Option(name: .long, help: "Model override for the chosen classifier.")
@@ -1291,7 +1291,7 @@ struct Classify: AsyncParsableCommand {
     @Argument(help: "Path to a transcript .jsonl file.")
     var path: String
 
-    @Option(name: .long, help: "Classifier: auto | gemini | claude (default: from app settings).")
+    @Option(name: .long, help: "Classifier: auto | gemini | claude | antigravity (default: from app settings).")
     var classifier: String?
 
     @Option(name: .long, help: "Model override for the chosen classifier.")
@@ -1452,11 +1452,17 @@ struct Doctor: AsyncParsableCommand {
             print("  status:                no Gemini key — classification will fail  NEEDS ATTENTION ✗")
             healthy = false
         }
-        // The `claude` CLI only matters when the effective classifier actually resolves to it.
-        if classifierKind == .claude || (classifierKind == .auto && !geminiKeyResolved) {
-            let claudeFound = Self.commandExists("claude")
+        // A CLI binary only matters when the effective classifier actually resolves to it.
+        let effectiveKind = classifierKind == .auto ? Classifiers.autoKind(config) : classifierKind
+        if effectiveKind == .claude {
+            let claudeFound = CLIPath.findClaude() != nil
             print("  claude CLI:            \(claudeFound ? "found ✓" : "MISSING ✗")")
             if !claudeFound { healthy = false }
+        }
+        if effectiveKind == .antigravity {
+            let agyFound = CLIPath.findAgy() != nil
+            print("  agy CLI:               \(agyFound ? "found ✓" : "MISSING ✗")")
+            if !agyFound { healthy = false }
         }
 
         func mark(_ ok: Bool) -> String { ok ? "installed ✓" : "not installed" }
@@ -1532,20 +1538,5 @@ struct Doctor: AsyncParsableCommand {
             print("NEEDS ATTENTION ✗ — see the ✗ marks above")
             throw ExitCode.failure
         }
-    }
-
-    static func commandExists(_ name: String) -> Bool {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        p.arguments = ["which", name]
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
-        do {
-            try p.run()
-        } catch {
-            return false
-        }
-        p.waitUntilExit()
-        return p.terminationStatus == 0
     }
 }

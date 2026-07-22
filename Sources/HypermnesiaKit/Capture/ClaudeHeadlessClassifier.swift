@@ -25,18 +25,6 @@ public struct ClaudeHeadlessClassifier: Classifier {
         self.timeout = timeout
     }
 
-    /// Throwaway working directory for the `claude -p` subprocess. `claude` writes its own session
-    /// transcript under `~/.claude/projects/<encoded-cwd>/`; running it from a temp dir (which
-    /// `ClaudeCodeSessions.isEphemeral` filters out) keeps the classifier's own transcripts from
-    /// being re-ingested as if they were real project sessions on the next backfill — a self-feeding
-    /// loop that would re-extract duplicate memories and spawn ever more classifier transcripts.
-    static let workdir: String = {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("hypermnesia-classifier", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.path
-    }()
-
     public func classify(
         _ conversation: Conversation,
         recentMemories: [RecentMemoryHint]
@@ -60,7 +48,7 @@ public struct ClaudeHeadlessClassifier: Classifier {
 
         let result = Shell.run(
             claudePath, args,
-            cwd: Self.workdir,
+            cwd: ClassifierWorkdir.path,
             stdin: ClassifierPrompts.user(conversation, recentMemories: recentMemories, focus: focus),
             environment: env,
             timeout: timeout
@@ -112,7 +100,7 @@ extension ClaudeHeadlessClassifier: Completer {
         var env = ProcessInfo.processInfo.environment
         env["HYPERMNESIA_DISABLE"] = "1"
         env["HYPERTHYMESIA_DISABLE"] = "1"   // pre-rename hooks may still be installed
-        let result = Shell.run(claudePath, args, cwd: Self.workdir, stdin: user, environment: env, timeout: timeout)
+        let result = Shell.run(claudePath, args, cwd: ClassifierWorkdir.path, stdin: user, environment: env, timeout: timeout)
         guard result.succeeded else {
             throw ClassifierError.toolFailed(result.stderr.isEmpty ? "exit \(result.status)" : result.stderr)
         }

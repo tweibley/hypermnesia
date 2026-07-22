@@ -5,9 +5,9 @@ import Foundation
 ///  - Gemini: mime-only JSON mode (`response_format` with NO schema — the interactions API's
 ///    structured-output schema subset silently drops freeform objects, so the MIME type is
 ///    constrained but the shape never is).
-///  - `claude -p`: JSON is prompt-enforced only; output may arrive fenced or wrapped in prose, so
-///    every caller must parse with `ClassifierJSON.extractObject` and always run under the
-///    adapter's hard timeout.
+///  - `claude -p` / `agy --print`: JSON is prompt-enforced only; output may arrive fenced or
+///    wrapped in prose, so every caller must parse with `ClassifierJSON.extractObject` and always
+///    run under the adapter's hard timeout.
 public protocol DreamCompleter: Sendable {
     func completeJSON(system: String, user: String) async throws -> String
 }
@@ -20,21 +20,8 @@ public enum DreamCompleters {
     public static func makeFromConfig(
         _ config: AppConfig = AppConfigStore.loadBestEffort()
     ) -> DreamCompleter {
-        switch Classifiers.Kind(rawValue: config.classifier) ?? .auto {
-        case .gemini:
-            return GeminiClassifier(
-                apiKey: AppConfigStore.resolvedGeminiKey(config) ?? "",
-                model: config.geminiModel, timeout: timeout)
-        case .claude:
-            return ClaudeHeadlessClassifier(
-                claudePath: CLIPath.claude(), model: config.claudeModel, timeout: timeout)
-        case .auto:
-            if let key = AppConfigStore.resolvedGeminiKey(config) {
-                return GeminiClassifier(apiKey: key, model: config.geminiModel, timeout: timeout)
-            }
-            return ClaudeHeadlessClassifier(
-                claudePath: CLIPath.claude(), model: config.claudeModel, timeout: timeout)
-        }
+        Classifiers.engine(
+            Classifiers.Kind(rawValue: config.classifier) ?? .auto, config: config, timeout: timeout)
     }
 
     /// Human-readable engine label for stats/consent copy ("gemini (gemini-3.5-flash)").

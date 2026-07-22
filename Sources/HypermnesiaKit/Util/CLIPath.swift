@@ -12,7 +12,12 @@ public enum CLIPath {
     /// best-effort attempt). Checks the current PATH first, then a login shell, then `fallbacks`.
     public static func resolve(_ name: String, fallbacks: [String] = []) -> String {
         if name.contains("/") { return name }
+        return find(name, fallbacks: fallbacks) ?? name
+    }
 
+    /// Absolute path for `name`, or `nil` when the tool genuinely isn't installed — the
+    /// availability probe behind `Classifiers.autoKind`.
+    public static func find(_ name: String, fallbacks: [String] = []) -> String? {
         // Fast path: already reachable on the current PATH (the CLI/hook context).
         if let onPath = which(name, shell: nil) { return onPath }
 
@@ -24,17 +29,40 @@ public enum CLIPath {
             let expanded = NSString(string: fallback).expandingTildeInPath
             if FileManager.default.isExecutableFile(atPath: expanded) { return expanded }
         }
-        return name
+        return nil
     }
+
+    private static let claudeFallbacks = [
+        "~/.local/bin/claude",
+        "~/.claude/local/claude",
+        "/opt/homebrew/bin/claude",
+        "/usr/local/bin/claude"
+    ]
+
+    private static let agyFallbacks = [
+        "~/.local/bin/agy",
+        "/opt/homebrew/bin/agy",
+        "/usr/local/bin/agy"
+    ]
 
     /// The `claude` CLI, resolved via PATH/login-shell with the usual install locations as fallbacks.
     public static func claude() -> String {
-        resolve("claude", fallbacks: [
-            "~/.local/bin/claude",
-            "~/.claude/local/claude",
-            "/opt/homebrew/bin/claude",
-            "/usr/local/bin/claude"
-        ])
+        resolve("claude", fallbacks: claudeFallbacks)
+    }
+
+    /// The `claude` CLI's path, or `nil` when it isn't installed.
+    public static func findClaude() -> String? {
+        find("claude", fallbacks: claudeFallbacks)
+    }
+
+    /// The Antigravity `agy` CLI, resolved via PATH/login-shell with install-location fallbacks.
+    public static func agy() -> String {
+        resolve("agy", fallbacks: agyFallbacks)
+    }
+
+    /// The `agy` CLI's path, or `nil` when it isn't installed.
+    public static func findAgy() -> String? {
+        find("agy", fallbacks: agyFallbacks)
     }
 
     private static func which(_ name: String, shell: String?) -> String? {

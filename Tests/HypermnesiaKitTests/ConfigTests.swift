@@ -21,6 +21,8 @@ struct ConfigTests {
         #expect(partial.classifier == "claude")
         #expect(partial.maxMemoriesInjected == 40)
         #expect(partial.injectAtSessionStart == true)
+        // Configs written before the antigravity engine existed decode to its default model.
+        #expect(partial.antigravityModel == AntigravityClassifier.defaultModel)
     }
 
     @Test("AppConfigStore reports corrupt existing config instead of silently defaulting")

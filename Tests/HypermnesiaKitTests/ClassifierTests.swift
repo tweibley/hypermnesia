@@ -123,4 +123,83 @@ struct ClassifierTests {
     private func jsonString(_ s: String) -> String {
         String(decoding: try! JSONEncoder().encode(s), as: UTF8.self)
     }
+
+    // MARK: - Engine selection
+
+    @Test("engine maps every explicit kind to its adapter, honoring config models and overrides")
+    func engineSelection() {
+        var config = AppConfig()
+        config.antigravityModel = "gemini-3.6-flash-low"
+        #expect(Classifiers.engine(.gemini, config: config) is GeminiClassifier)
+        #expect(Classifiers.engine(.claude, config: config) is ClaudeHeadlessClassifier)
+        #expect((Classifiers.engine(.antigravity, config: config) as? AntigravityClassifier)?.model
+            == "gemini-3.6-flash-low")
+        #expect((Classifiers.engine(.antigravity, config: config, model: "override") as? AntigravityClassifier)?.model
+            == "override")
+    }
+
+    @Test("auto resolves to gemini whenever a key is configured")
+    func autoPrefersGemini() {
+        var config = AppConfig()
+        config.geminiApiKey = "test-key"
+        #expect(Classifiers.autoKind(config) == .gemini)
+        #expect(Classifiers.engine(.auto, config: config) is GeminiClassifier)
+    }
+
+    @Test("cliDescription names the antigravity engine and its model")
+    func antigravityDescription() {
+        #expect(Classifiers.cliDescription(classifier: "antigravity", config: AppConfig())
+            == "antigravity (\(AntigravityClassifier.defaultModel))")
+    }
+
+    @Test("AntigravityClassifier runs the CLI and parses raw (fenced) model output")
+    func antigravityStubRun() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agy-stub-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let stub = dir.appendingPathComponent("agy")
+        try """
+        #!/bin/sh
+        echo '```json'
+        echo '{"memories":[{"type":"fact","title":"DB","summary":"Postgres"}]}'
+        echo '```'
+        """.write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+
+        let conversation = Conversation(
+            sessionId: nil, cwd: nil, gitBranch: nil,
+            messages: [ConversationMessage(role: "user", content: "hi", timestamp: nil)])
+        let memories = try await AntigravityClassifier(agyPath: stub.path)
+            .classify(conversation, recentMemories: [])
+        #expect(memories.map(\.type) == [.fact])
+        #expect(memories.first?.title == "DB")
+    }
+
+    @Test("AntigravityClassifier surfaces a failing CLI as toolFailed, empty output as emptyOutput")
+    func antigravityStubErrors() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agy-stub-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let conversation = Conversation(
+            sessionId: nil, cwd: nil, gitBranch: nil,
+            messages: [ConversationMessage(role: "user", content: "hi", timestamp: nil)])
+
+        let failing = dir.appendingPathComponent("agy-fail")
+        try "#!/bin/sh\necho 'not signed in' >&2\nexit 3\n".write(to: failing, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: failing.path)
+        await #expect(throws: ClassifierError.self) {
+            _ = try await AntigravityClassifier(agyPath: failing.path)
+                .classify(conversation, recentMemories: [])
+        }
+
+        let silent = dir.appendingPathComponent("agy-silent")
+        try "#!/bin/sh\nexit 0\n".write(to: silent, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: silent.path)
+        await #expect(throws: ClassifierError.self) {
+            _ = try await AntigravityClassifier(agyPath: silent.path)
+                .classify(conversation, recentMemories: [])
+        }
+    }
 }

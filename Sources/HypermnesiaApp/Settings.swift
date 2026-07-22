@@ -381,11 +381,12 @@ private struct ClassifierSettings: View {
             Text("Automatic").tag("auto")
             Text("Gemini").tag("gemini")
             Text("Claude (claude -p)").tag("claude")
+            Text("Antigravity (agy)").tag("antigravity")
         }
         .pickerStyle(.segmented)
 
         Text(model.config.classifier == "auto"
-             ? "Automatic uses Gemini when a key is available, otherwise Claude headless."
+             ? "Automatic uses Gemini when a key is available, then Claude headless, then Antigravity's agy CLI (your Google sign-in — no API key)."
              : " ")
             .font(.caption).foregroundStyle(.secondary)
 
@@ -413,6 +414,10 @@ private struct ClassifierSettings: View {
                 HStack {
                     Text("Claude model").frame(width: 130, alignment: .leading)
                     TextField("claude-haiku-4-5-20251001", text: $model.config.claudeModel).textFieldStyle(.roundedBorder)
+                }
+                HStack {
+                    Text("Antigravity model").frame(width: 130, alignment: .leading)
+                    TextField("gemini-3.6-flash-medium", text: $model.config.antigravityModel).textFieldStyle(.roundedBorder)
                 }
             }
             .padding(6)

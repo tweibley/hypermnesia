@@ -4,10 +4,12 @@ import Darwin
 /// User-editable configuration, shared by the app (Settings UI) and the CLI/hooks. Stored as JSON
 /// at `~/Library/Application Support/Hypermnesia/config.json` (0600 — it may hold an API key).
 public struct AppConfig: Codable, Sendable, Equatable {
-    /// "auto" | "gemini" | "claude"
+    /// "auto" | "gemini" | "claude" | "antigravity"
     public var classifier: String
     public var geminiModel: String
     public var claudeModel: String
+    /// Model name for the Antigravity `agy` CLI (an `agy models` name — effort is in the name).
+    public var antigravityModel: String
     /// Optional explicit Gemini key; when nil, falls back to the `GEMINI_API_KEY` environment.
     public var geminiApiKey: String?
     public var injectAtSessionStart: Bool
@@ -63,6 +65,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         classifier: String = "auto",
         geminiModel: String = GeminiClassifier.defaultModel,
         claudeModel: String = ClaudeHeadlessClassifier.defaultModel,
+        antigravityModel: String = AntigravityClassifier.defaultModel,
         geminiApiKey: String? = nil,
         injectAtSessionStart: Bool = true,
         injectPerPrompt: Bool = true,
@@ -88,6 +91,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.classifier = classifier
         self.geminiModel = geminiModel
         self.claudeModel = claudeModel
+        self.antigravityModel = antigravityModel
         self.geminiApiKey = geminiApiKey
         self.injectAtSessionStart = injectAtSessionStart
         self.injectPerPrompt = injectPerPrompt
@@ -118,6 +122,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         classifier = try c.decodeIfPresent(String.self, forKey: .classifier) ?? d.classifier
         geminiModel = try c.decodeIfPresent(String.self, forKey: .geminiModel) ?? d.geminiModel
         claudeModel = try c.decodeIfPresent(String.self, forKey: .claudeModel) ?? d.claudeModel
+        antigravityModel = try c.decodeIfPresent(String.self, forKey: .antigravityModel) ?? d.antigravityModel
         geminiApiKey = try c.decodeIfPresent(String.self, forKey: .geminiApiKey)
         injectAtSessionStart = try c.decodeIfPresent(Bool.self, forKey: .injectAtSessionStart) ?? d.injectAtSessionStart
         injectPerPrompt = try c.decodeIfPresent(Bool.self, forKey: .injectPerPrompt) ?? d.injectPerPrompt

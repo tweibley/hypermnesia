@@ -41,13 +41,14 @@ runtime.
    Stop / SessionEnd ──capture──►  queue the transcript
                                         │
                                         ▼ (drained by the app or a hook-spawned CLI)
-   transcript ─► condense ─► classify (Gemini / Claude) ─► dedup ─► typed memories ─► decay
+   transcript ─► condense ─► classify (Gemini / Claude / agy) ─► dedup ─► typed memories ─► decay
 ```
 
 - **Capture** — incremental, *during* the session: a `Stop` hook checkpoints a per-session cursor and
   only the new slice of the transcript is classified once a few exchanges accumulate.
-- **Classify** — a pluggable adapter (default **Gemini 3.5 Flash**, fallback `claude -p`) extracts
-  typed memories: `decision`, `convention`, `intent`, `fact`, `concern`, `backlog`, `codeRef`.
+- **Classify** — a pluggable adapter (default **Gemini 3.5 Flash**, fallbacks `claude -p` and
+  Antigravity's `agy`) extracts typed memories: `decision`, `convention`, `intent`, `fact`,
+  `concern`, `backlog`, `codeRef`.
 - **Curate** — confident captures go live on their own; revisions, weak captures, and agent
   `remember` writes wait as drafts for your confirm/dismiss. Near-duplicates are merged (Jaccard),
   and a newer memory that contradicts an older one retires it automatically.
@@ -162,7 +163,8 @@ Desktop or any MCP client can `recall`, `ask`, and `remember`. Add to your clien
 ```
 
 A `GEMINI_API_KEY` enables the (recommended) Gemini classifier; without one it falls back to
-`claude -p`. Both are configurable in the app's **Settings** (⌘,).
+`claude -p`, then to Antigravity's `agy` CLI — both run on the subscription sign-in you already
+have, no separate API key needed. All are configurable in the app's **Settings** (⌘,).
 
 ## CLI
 
@@ -177,7 +179,7 @@ A `GEMINI_API_KEY` enables the (recommended) Gemini classifier; without one it f
 | `audit [--project P] [--deep] [--apply]` | Flag memories whose files are missing/changed since capture |
 | `mcp` | Run a Model Context Protocol server (stdio) for any MCP client |
 | `hydrate` / `capture` `[--client claude\|cursor\|antigravity]` | Hook entry points (used by `install-*-hooks`) |
-| `drain [--dry-run] [--limit N] [--classifier auto\|gemini\|claude]` | Classify queued captures (all clients share one queue) |
+| `drain [--dry-run] [--limit N] [--classifier auto\|gemini\|claude\|antigravity]` | Classify queued captures (all clients share one queue) |
 | `install-hooks` / `install-mcp` `[--project P] [--uninstall]` | Wire/unwire the Claude Code hooks / MCP server |
 | `install-cursor-hooks` / `install-cursor-mcp` `[--project P] [--uninstall] [--dry-run]` | Wire/unwire the Cursor hooks / MCP server |
 | `install-antigravity-hooks` / `install-antigravity-mcp` `[--project P] [--uninstall] [--dry-run]` | Wire/unwire the Google Antigravity hooks / MCP server |
@@ -192,7 +194,7 @@ A `GEMINI_API_KEY` enables the (recommended) Gemini classifier; without one it f
 
 Everything is stored locally in `~/Library/Application Support/Hypermnesia/memory.db`. There is
 no telemetry. The only data that leaves your machine goes to the classifier/completer you configure
-(Gemini via your API key, or `claude -p`): transcript text for classification, and stored memory
+(Gemini via your API key, `claude -p`, or Antigravity's `agy`): transcript text for classification, and stored memory
 summaries plus your question for `ask` and `audit --deep`. Because memories are injected into
 future agent sessions, the ones needing judgment (revisions, weak captures, agent `remember`
 writes) land as **drafts** you confirm in the app first; confident captures auto-confirm by
@@ -227,7 +229,7 @@ explicitly, hydration matched it (12/12).
 
 **What leaves my machine?**
 The store is local SQLite; no telemetry, no accounts. Exactly two things go to the
-classifier/completer you configure (Gemini via your key, or `claude -p`): transcript slices for
+classifier/completer you configure (Gemini via your key, `claude -p`, or Antigravity's `agy`): transcript slices for
 classification, and stored memory summaries plus your question for `ask` / `audit --deep`. That's
 the whole list — [SECURITY.md](SECURITY.md) has the threat model.
 
