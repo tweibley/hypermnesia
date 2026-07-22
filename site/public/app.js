@@ -39,11 +39,21 @@ function initBrainMRICanvas() {
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
+    const prevWidth = width;
+    const prevHeight = height;
     width = rect.width;
     height = rect.height;
     canvas.width = width * window.devicePixelRatio;
     canvas.height = height * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    // Nodes were laid out for the old dimensions; rescale so the graph
+    // stays centered instead of bunching against one edge.
+    if (prevWidth && prevHeight && (prevWidth !== width || prevHeight !== height)) {
+      for (const node of nodes) {
+        node.x *= width / prevWidth;
+        node.y *= height / prevHeight;
+      }
+    }
   }
 
   window.addEventListener('resize', resize);
