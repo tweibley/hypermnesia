@@ -157,7 +157,12 @@ struct EnvironmentReportTests {
         config.classifier = "claude"
         let (text, _) = await EnvironmentReport.generate(config: config, liveCheck: false)
         #expect(text.contains("### claude CLI"))
-        #expect(text.contains("- apiKeyHelper:"))
+        // The helper line only renders when a claude install exists — CI runners have none.
+        if CLIPath.findClaude() != nil {
+            #expect(text.contains("- apiKeyHelper:"))
+        } else {
+            #expect(text.contains("- path: NOT FOUND"))
+        }
         // Redaction: names may appear, but no env var VALUE may. Spot-check with a canary.
         setenv("ANTHROPIC_TEST_CANARY", "super-secret-value", 1)
         defer { unsetenv("ANTHROPIC_TEST_CANARY") }
