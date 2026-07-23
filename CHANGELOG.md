@@ -5,6 +5,26 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `claude -p` classifier now works from the app for API-key, gateway, and npm installs.**
+  The Dock-launched app inherits launchd's bare environment, so classifiers it spawned were missing
+  the login shell's `PATH` and profile-exported variables. That broke every setup that worked fine
+  in a terminal: `apiKeyHelper` scripts resolved via `PATH` failed with "command not found"
+  (including LLM-gateway helpers like Portkey's), API-key users got "Not logged in · Please run
+  /login", npm-shim installs couldn't find `node`, and `$GEMINI_API_KEY` from a shell profile was
+  invisible. Classifier subprocesses now merge the login-shell environment (captured once per
+  process) into their own: `PATH` is joined, and every profile-exported variable fills in when
+  absent — values already present always win, and only shell bookkeeping (`PWD`, `SHLVL`, …) is
+  skipped. Gap-filling everything, rather than an allowlist, is deliberate: `apiKeyHelper`
+  scripts (such as a [Portkey gateway](https://github.com/portkey-ai/gateway) helper) are
+  arbitrary shell that can read any variable the user exports. Thanks to
+  [@anoldguy](https://github.com/anoldguy) for the report and diagnostics.
+- **A cleared model field in Settings no longer breaks classification.** The model text fields
+  show the default model as placeholder text, so clearing one stored an empty string that *looked*
+  configured but sent `--model ""` (an API 400). Empty or whitespace model values now fall back to
+  the backend's default, both when loading the config and at classifier construction.
+
 ## [0.5.0] — 2026-07-22
 
 ### Added

@@ -190,16 +190,30 @@ public enum Classifiers {
         case .gemini:
             return GeminiClassifier(
                 apiKey: AppConfigStore.resolvedGeminiKey(config) ?? "",
-                model: model ?? config.geminiModel, timeout: timeout)
+                model: normalizedModel(model ?? config.geminiModel, default: GeminiClassifier.defaultModel),
+                timeout: timeout)
         case .claude:
             return ClaudeHeadlessClassifier(
-                claudePath: CLIPath.claude(), model: model ?? config.claudeModel, timeout: timeout)
+                claudePath: CLIPath.claude(),
+                model: normalizedModel(model ?? config.claudeModel, default: ClaudeHeadlessClassifier.defaultModel),
+                timeout: timeout)
         case .antigravity:
             return AntigravityClassifier(
-                agyPath: CLIPath.agy(), model: model ?? config.antigravityModel, timeout: timeout)
+                agyPath: CLIPath.agy(),
+                model: normalizedModel(model ?? config.antigravityModel, default: AntigravityClassifier.defaultModel),
+                timeout: timeout)
         case .auto:
             return engine(autoKind(config), config: config, model: model, timeout: timeout)
         }
+    }
+
+    /// An empty or whitespace model must never reach a backend: the Settings TextField binds
+    /// directly to the config value while showing the default as PLACEHOLDER text, so a cleared
+    /// field stores "" yet still LOOKS configured — and `claude --model ""` fails with an API 400
+    /// ("String should have at least 1 character"). Fall back to the backend's default instead.
+    static func normalizedModel(_ model: String, default defaultModel: String) -> String {
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? defaultModel : trimmed
     }
 
     /// What `.auto` resolves to right now: Gemini when a key is available, else `claude` when

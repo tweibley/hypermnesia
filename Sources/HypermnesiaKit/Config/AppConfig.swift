@@ -120,9 +120,17 @@ public struct AppConfig: Codable, Sendable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppConfig()
         classifier = try c.decodeIfPresent(String.self, forKey: .classifier) ?? d.classifier
-        geminiModel = try c.decodeIfPresent(String.self, forKey: .geminiModel) ?? d.geminiModel
-        claudeModel = try c.decodeIfPresent(String.self, forKey: .claudeModel) ?? d.claudeModel
-        antigravityModel = try c.decodeIfPresent(String.self, forKey: .antigravityModel) ?? d.antigravityModel
+        // Model fields self-heal on load: a cleared Settings field persists "" (while the field
+        // still shows the default as placeholder text), and `--model ""` breaks every backend —
+        // treat empty/whitespace the same as absent.
+        func model(_ key: CodingKeys, _ fallback: String) -> String {
+            let raw = (try? c.decodeIfPresent(String.self, forKey: key)) ?? nil
+            let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? fallback : trimmed
+        }
+        geminiModel = model(.geminiModel, d.geminiModel)
+        claudeModel = model(.claudeModel, d.claudeModel)
+        antigravityModel = model(.antigravityModel, d.antigravityModel)
         geminiApiKey = try c.decodeIfPresent(String.self, forKey: .geminiApiKey)
         injectAtSessionStart = try c.decodeIfPresent(Bool.self, forKey: .injectAtSessionStart) ?? d.injectAtSessionStart
         injectPerPrompt = try c.decodeIfPresent(Bool.self, forKey: .injectPerPrompt) ?? d.injectPerPrompt
@@ -300,7 +308,10 @@ public enum AppConfigStore {
     /// Effective Gemini key: explicit config value, else the `GEMINI_API_KEY` environment.
     public static func resolvedGeminiKey(_ config: AppConfig) -> String? {
         if let key = config.geminiApiKey, !key.isEmpty { return key }
-        let env = ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
+        // Login-shell aware: $GEMINI_API_KEY exported in a shell profile is invisible to the
+        // Dock-launched app's bare environment, so ask LoginShellEnvironment rather than only
+        // ProcessInfo — otherwise "leave blank to use $GEMINI_API_KEY" is false in the app.
+        let env = LoginShellEnvironment.value("GEMINI_API_KEY")
         return (env?.isEmpty == false) ? env : nil
     }
 }

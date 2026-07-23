@@ -60,7 +60,9 @@ public struct AntigravityClassifier: Classifier {
         var args = ["--print", system + "\n\n" + user]
         if let model { args += ["--model", model] }
 
-        var env = ProcessInfo.processInfo.environment
+        // Login-shell merge: see LoginShellEnvironment — the GUI app's bare launchd environment
+        // otherwise breaks PATH-dependent auth helpers and profile-exported keys.
+        var env = LoginShellEnvironment.classifierEnvironment()
         env["HYPERMNESIA_DISABLE"] = "1"
         env["HYPERTHYMESIA_DISABLE"] = "1"   // pre-rename hooks may still be installed
 

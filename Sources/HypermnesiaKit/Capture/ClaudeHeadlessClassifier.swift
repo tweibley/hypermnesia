@@ -42,7 +42,9 @@ public struct ClaudeHeadlessClassifier: Classifier {
         var args = ["-p", "--output-format", "json", "--system-prompt", ClassifierPrompts.system]
         if let model { args += ["--model", model] }
 
-        var env = ProcessInfo.processInfo.environment
+        // Login-shell merge: a GUI-launched app inherits launchd's bare environment, which breaks
+        // PATH-resolved apiKeyHelper scripts, npm-shim installs, and profile-exported API keys.
+        var env = LoginShellEnvironment.classifierEnvironment()
         env["HYPERMNESIA_DISABLE"] = "1"
         env["HYPERTHYMESIA_DISABLE"] = "1"   // pre-rename hooks may still be installed   // stop the classifier's own session re-triggering hooks
 
@@ -97,7 +99,7 @@ extension ClaudeHeadlessClassifier: Completer {
     public func complete(system: String, user: String) async throws -> String {
         var args = ["-p", "--output-format", "json", "--system-prompt", system]
         if let model { args += ["--model", model] }
-        var env = ProcessInfo.processInfo.environment
+        var env = LoginShellEnvironment.classifierEnvironment()
         env["HYPERMNESIA_DISABLE"] = "1"
         env["HYPERTHYMESIA_DISABLE"] = "1"   // pre-rename hooks may still be installed
         let result = Shell.run(claudePath, args, cwd: ClassifierWorkdir.path, stdin: user, environment: env, timeout: timeout)
