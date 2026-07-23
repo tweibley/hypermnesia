@@ -255,6 +255,10 @@ The only recurring spend is classification, on the model you choose.
 
 - **Start with `hypermnesia doctor`** — it reports toolchain, classifier, hook/MCP install state,
   and the memory count for both clients.
+- **Filing an issue?** Run `hypermnesia doctor --report` and paste the output. It's a shareable,
+  secret-free environment report — how `claude` is installed and authenticated, which relevant
+  environment variables exist (names only, never values), whether an `apiKeyHelper` resolves, and
+  a live classifier check.
 - **Captures queue up but no memories appear:** `hypermnesia drain --dry-run` shows what's queued;
   a failing classifier now reports itself (the app shows a banner, `drain` exits nonzero). The usual
   cause is a missing/invalid `GEMINI_API_KEY` — set it, or switch the classifier in

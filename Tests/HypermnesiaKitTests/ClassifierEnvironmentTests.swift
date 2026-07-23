@@ -127,3 +127,42 @@ struct ClassifierEnvironmentTests {
         #expect(config.claudeModel == "claude-sonnet-5")
     }
 }
+
+/// `doctor --report` building blocks — the helper-resolution check is the exact Portkey
+/// `claude-gateway` failure mode: a helper on the login-shell PATH but not the bare app PATH.
+@Suite("Environment report")
+struct EnvironmentReportTests {
+
+    @Test("helperResolves finds a bare command only via the given PATH")
+    func helperResolvesViaPath() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hyp-report-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let helper = dir.appendingPathComponent("claude-gateway")
+        try "#!/bin/sh\necho key\n".write(to: helper, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+
+        // Bare launchd PATH: not found — Nathan's bug. With the login-shell dir joined: found.
+        #expect(!EnvironmentReport.helperResolves("claude-gateway", env: ["PATH": "/usr/bin:/bin"]))
+        #expect(EnvironmentReport.helperResolves("claude-gateway", env: ["PATH": "/usr/bin:/bin:\(dir.path)"]))
+        // Absolute and tilde-free paths bypass PATH entirely; extra arguments are ignored.
+        #expect(EnvironmentReport.helperResolves("\(helper.path) --refresh", env: [:]))
+        #expect(!EnvironmentReport.helperResolves("/nonexistent/helper", env: [:]))
+    }
+
+    @Test("report renders the claude section without leaking env values")
+    func reportClaudeSection() async {
+        var config = AppConfig()
+        config.classifier = "claude"
+        let (text, _) = await EnvironmentReport.generate(config: config, liveCheck: false)
+        #expect(text.contains("### claude CLI"))
+        #expect(text.contains("- apiKeyHelper:"))
+        // Redaction: names may appear, but no env var VALUE may. Spot-check with a canary.
+        setenv("ANTHROPIC_TEST_CANARY", "super-secret-value", 1)
+        defer { unsetenv("ANTHROPIC_TEST_CANARY") }
+        let (text2, _) = await EnvironmentReport.generate(config: config, liveCheck: false)
+        #expect(text2.contains("ANTHROPIC_TEST_CANARY"))
+        #expect(!text2.contains("super-secret-value"))
+    }
+}

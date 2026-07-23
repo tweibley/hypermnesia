@@ -1436,7 +1436,16 @@ struct Doctor: AsyncParsableCommand {
         abstract: "Check the local environment (toolchain, classifier, paths)."
     )
 
+    @Flag(name: .long, help: "Print a shareable environment report for bug reports (no secrets: variable names only, no account email) including a live classifier check.")
+    var report = false
+
     func run() async throws {
+        if report {
+            let (text, healthy) = await EnvironmentReport.generate()
+            print(text)
+            if !healthy { throw ExitCode.failure }
+            return
+        }
         var healthy = true
         print("hypermnesia \(Hypermnesia.version)")
 

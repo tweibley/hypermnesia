@@ -244,6 +244,15 @@ public enum Classifiers {
         engine(kind(flag: flag, config: config), config: config, model: model)
     }
 
+    /// Same resolution as `forCLI`, exposing the full engine (classify + complete) — used by
+    /// `doctor --report`'s live check, which exercises the free-form completion path.
+    public static func engineForCLI(
+        classifier flag: String?, model: String?,
+        config: AppConfig = AppConfigStore.loadBestEffort(), timeout: TimeInterval = 120
+    ) -> any ClassifierEngine {
+        engine(kind(flag: flag, config: config), config: config, model: model, timeout: timeout)
+    }
+
     /// What `forCLI` will resolve to, for progress output.
     public static func cliDescription(classifier flag: String?, config: AppConfig = AppConfigStore.loadBestEffort()) -> String {
         var resolved = kind(flag: flag, config: config)

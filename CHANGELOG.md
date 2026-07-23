@@ -5,6 +5,15 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **`hypermnesia doctor --report`** prints a shareable, secret-free environment report for bug
+  reports: versions, classifier configuration, how the `claude` CLI is installed (native binary vs
+  script shim) and authenticated (method only, no account details), whether a configured
+  `apiKeyHelper` resolves in the environment the app spawns classifiers with, which relevant
+  environment variables are present (names only — values are never printed), and a live end-to-end
+  classifier check. Exits nonzero when something needs attention, so it doubles as a health probe.
+
 ### Fixed
 
 - **The `claude -p` classifier now works from the app for API-key, gateway, and npm installs.**
