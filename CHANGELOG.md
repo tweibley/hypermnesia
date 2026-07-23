@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-07-23
+
 ### Added
 
 - **`hypermnesia doctor --report`** prints a shareable, secret-free environment report for bug
