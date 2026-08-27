@@ -5,6 +5,16 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-08-27
+
+### Fixed
+
+- **The headless classifier now works when Claude routes through an AI gateway (e.g. Portkey).**
+  The `claude -p` child was spawned without the login-shell environment, so gateway setups lost
+  their `ANTHROPIC_*` variables and the `apiKeyHelper`'s dependencies, and every classification
+  call failed. The login-shell environment is now merged into the classifier child's environment,
+  same as the 0.6.0 fix did for Dock-launched apps.
+
 ## [0.6.0] — 2026-07-23
 
 ### Added
