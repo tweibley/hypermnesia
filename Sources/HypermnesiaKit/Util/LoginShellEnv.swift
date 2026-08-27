@@ -10,8 +10,11 @@ import Foundation
 /// "Not logged in · Please run /login", and `$GEMINI_API_KEY` silently resolves to nothing.
 ///
 /// The login shell is asked ONCE per process (same caching pattern as `CLIPath`'s lookup) and
-/// merged gap-filling: values already present in the process environment always win, so hook/CLI
-/// contexts (which already have a real environment) are unchanged.
+/// merged gap-filling: values already present in the process environment always win — with one
+/// exception. When this process runs *inside* a Claude Code session (hooks, the backgrounded
+/// drain), the parent session's own `CLAUDE_*`/`ANTHROPIC_*` variables are stripped first
+/// (`strippingParentClaudeSession`): they configure the parent's transport/auth, and inheriting
+/// them breaks the spawned classifier under host-managed auth and gateway setups.
 public enum LoginShellEnvironment {
     /// Shell bookkeeping that must not leak from the login shell: each would describe that
     /// throwaway shell, not this process (the subprocess cwd is set explicitly to
@@ -30,18 +33,46 @@ public enum LoginShellEnvironment {
         !excludedKeys.contains(key)
     }
 
+    /// Markers that this process was spawned from *inside* a Claude Code session (hook, MCP
+    /// server, or the backgrounded drain those hooks launch).
+    static let nestedSessionMarkers = ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID"]
+
+    /// Variable families a parent Claude Code session injects into its subprocesses. They
+    /// describe — and authenticate — *that* session, not this process, and a child `claude`
+    /// spawned for classification must not inherit them: `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1`
+    /// makes the child expect a host-injected token that is never exported to hooks ("Not logged
+    /// in · Please run /login"), and the host's session-scoped `ANTHROPIC_CUSTOM_HEADERS` shadows
+    /// the settings.json value gateway setups require (Portkey: "400 … x-portkey-config or
+    /// x-portkey-provider header is required"). Dropping the whole families is safe: anything the
+    /// user exports in their own shell profile is restored by the login-shell gap-fill, and the
+    /// child CLI reads settings.json (`env`, `apiKeyHelper`) itself.
+    static let parentSessionPrefixes = ["CLAUDE_", "ANTHROPIC_"]
+
+    /// The process environment with the parent Claude session's variables removed — a no-op
+    /// outside a nested-session context (GUI app, plain terminal), where those variables are the
+    /// user's own.
+    static func strippingParentClaudeSession(_ env: [String: String]) -> [String: String] {
+        guard nestedSessionMarkers.contains(where: { !(env[$0] ?? "").isEmpty }) else { return env }
+        return env.filter { key, _ in
+            key != "CLAUDECODE" && !parentSessionPrefixes.contains { key.hasPrefix($0) }
+        }
+    }
+
     private static let captured: [String: String] = capture()
 
     /// The process environment with login-shell values filled into the gaps —
     /// the environment every classifier subprocess should be spawned with.
     public static func classifierEnvironment() -> [String: String] {
-        merge(ProcessInfo.processInfo.environment, loginShell: captured)
+        merge(strippingParentClaudeSession(ProcessInfo.processInfo.environment), loginShell: captured)
     }
 
     /// A single variable, preferring the process environment (used for
-    /// `$GEMINI_API_KEY` resolution, which must work in the GUI context too).
+    /// `$GEMINI_API_KEY` resolution, which must work in the GUI context too). Reads through the
+    /// same parent-session strip as `classifierEnvironment()`, so lookups like `CLAUDE_CONFIG_DIR`
+    /// answer for the child we would spawn, not for the parent session.
     public static func value(_ key: String) -> String? {
-        if let v = ProcessInfo.processInfo.environment[key], !v.isEmpty { return v }
+        let env = strippingParentClaudeSession(ProcessInfo.processInfo.environment)
+        if let v = env[key], !v.isEmpty { return v }
         return captured[key]
     }
 
@@ -69,9 +100,20 @@ public enum LoginShellEnvironment {
     /// Ask the user's login shell for its environment, NUL-separated so values containing
     /// newlines can't corrupt the parse. Best-effort: any failure yields an empty dictionary,
     /// which makes the merge a no-op.
+    ///
+    /// The shell is spawned with a MINIMAL base environment, not the inherited one: in a hook
+    /// context the parent Claude session's exported variables would pass through `-lc` untouched
+    /// and be indistinguishable from profile exports — the gap-fill would reinject exactly what
+    /// `strippingParentClaudeSession` removed. With a clean base (the same one Terminal.app gives
+    /// a new login shell), the capture contains only what the profile itself exports.
     private static func capture() -> [String: String] {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        let result = Shell.run(shell, ["-lc", "/usr/bin/env -0"], timeout: 10)
+        let processEnv = ProcessInfo.processInfo.environment
+        let shell = processEnv["SHELL"] ?? "/bin/zsh"
+        var base: [String: String] = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
+        for key in ["HOME", "USER", "LOGNAME", "SHELL", "TERM", "LANG", "TMPDIR"] {
+            base[key] = processEnv[key]
+        }
+        let result = Shell.run(shell, ["-lc", "/usr/bin/env -0"], environment: base, timeout: 10)
         guard result.succeeded, !result.stdout.isEmpty else { return [:] }
         var env: [String: String] = [:]
         for entry in result.stdout.split(separator: "\0") {

@@ -107,7 +107,11 @@ struct IncrementalCaptureTests {
 
         let failed = await SessionIngestor.ingestIncremental(transcript: url, sessionId: "s", projectId: "p",
                                                              classifier: FailingClassifier(), store: store, minNewEvents: 6)
-        #expect(failed == .failed(reason: "classification failed", terminal: false))
+        guard case .failed(let reason, false) = failed else {
+            Issue.record("expected .failed, got \(failed)")
+            return
+        }
+        #expect(reason.hasPrefix("classification failed"))
         #expect(try store.cursor(sessionId: "s") == 0)   // cursor untouched — events not skipped
 
         // A later successful pass over the same events still captures them.

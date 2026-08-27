@@ -64,6 +64,65 @@ struct ClassifierEnvironmentTests {
         #expect(merged["_"] == nil)
     }
 
+    // MARK: - Parent Claude-session stripping
+
+    @Test("inside a Claude session, the parent's CLAUDE*/ANTHROPIC_* variables are stripped")
+    func stripsParentSessionVariables() {
+        // The Portkey/desktop-host failure: a hook-spawned classifier inherits the parent
+        // session's env. CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST makes the child `claude` expect a
+        // host token that was never exported ("Not logged in"), and the host's session-scoped
+        // ANTHROPIC_CUSTOM_HEADERS (metadata only, no x-portkey-config) shadows the settings.json
+        // headers the gateway requires (400).
+        let stripped = LoginShellEnvironment.strippingParentClaudeSession([
+            "CLAUDECODE": "1",
+            "CLAUDE_CODE_SESSION_ID": "abc",
+            "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": "1",
+            "CLAUDE_CODE_HOST_AUTH_ENV_VAR": "ANTHROPIC_AUTH_TOKEN",
+            "CLAUDE_PROJECT_DIR": "/tmp/somewhere",
+            "ANTHROPIC_BASE_URL": "https://gateway.example",
+            "ANTHROPIC_CUSTOM_HEADERS": "x-portkey-metadata: {\"session\":\"parent\"}",
+            "PATH": "/usr/bin:/bin",
+            "HOME": "/Users/u",
+            "PORTKEY_API_KEY": "pk-secret",
+        ])
+        #expect(stripped["CLAUDECODE"] == nil)
+        #expect(stripped["CLAUDE_CODE_SESSION_ID"] == nil)
+        #expect(stripped["CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST"] == nil)
+        #expect(stripped["CLAUDE_CODE_HOST_AUTH_ENV_VAR"] == nil)
+        #expect(stripped["CLAUDE_PROJECT_DIR"] == nil)
+        #expect(stripped["ANTHROPIC_BASE_URL"] == nil)
+        #expect(stripped["ANTHROPIC_CUSTOM_HEADERS"] == nil)
+        // Non-Claude variables survive — the apiKeyHelper still needs them.
+        #expect(stripped["PATH"] == "/usr/bin:/bin")
+        #expect(stripped["HOME"] == "/Users/u")
+        #expect(stripped["PORTKEY_API_KEY"] == "pk-secret")
+    }
+
+    @Test("outside a Claude session, ANTHROPIC_* variables are the user's own and untouched")
+    func stripIsNoopOutsideSession() {
+        let env = [
+            "ANTHROPIC_API_KEY": "sk-user",
+            "ANTHROPIC_BASE_URL": "https://proxy.example",
+            "CLAUDE_CONFIG_DIR": "/Users/u/.claude-work",
+            "PATH": "/usr/bin:/bin",
+        ]
+        #expect(LoginShellEnvironment.strippingParentClaudeSession(env) == env)
+    }
+
+    @Test("stripped variables are restored from the login-shell profile when the user exports them")
+    func strippedVariablesRefillFromProfile() {
+        // A user whose profile exports gateway config gets it back via the gap-fill merge —
+        // the strip only removes the *parent session's* values, not the user's own setup.
+        let stripped = LoginShellEnvironment.strippingParentClaudeSession([
+            "CLAUDECODE": "1",
+            "ANTHROPIC_CUSTOM_HEADERS": "x-portkey-metadata: parent-session-scoped",
+        ])
+        let merged = LoginShellEnvironment.merge(
+            stripped,
+            loginShell: ["ANTHROPIC_CUSTOM_HEADERS": "x-portkey-config: pc-user"])
+        #expect(merged["ANTHROPIC_CUSTOM_HEADERS"] == "x-portkey-config: pc-user")
+    }
+
     @Test("empty process values are treated as absent")
     func mergeTreatsEmptyAsAbsent() {
         let merged = LoginShellEnvironment.merge(

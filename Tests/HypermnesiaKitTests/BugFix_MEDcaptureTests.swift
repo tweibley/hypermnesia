@@ -81,7 +81,11 @@ struct BugFixMEDCaptureTests {
             transcript: url, sessionId: "s", projectId: "p",
             classifier: AlwaysFailingClassifier(), store: store, source: .backfill)
 
-        #expect(outcome == .failed(reason: "classification failed", terminal: false))
+        guard case .failed(let reason, false) = outcome else {
+            Issue.record("expected .failed, got \(outcome)")
+            return
+        }
+        #expect(reason.hasPrefix("classification failed"))
         // Crucially: the session is NOT sealed, so a later backfill retries it.
         #expect((try? store.isProcessed(sessionId: "s")) == false)
     }

@@ -26,6 +26,20 @@ public enum SessionIngestor {
         now.timeIntervalSince(modifiedAt) < liveWindow
     }
 
+    /// Failure reason for a classifier error. Keeps the stable "classification failed" prefix
+    /// (the drain counts classifier failures by it) but carries the underlying error so the
+    /// queue's `lastError` / `doctor` show something actionable ("Not logged in", a gateway 400)
+    /// instead of a bare "classification failed 5×".
+    static let classificationFailedPrefix = "classification failed"
+
+    static func classificationFailureReason(_ error: Error) -> String {
+        let detail = error.localizedDescription
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\n", with: " ")
+        guard !detail.isEmpty else { return classificationFailedPrefix }
+        return "\(classificationFailedPrefix): \(detail.prefix(300))"
+    }
+
     /// Ingest a whole session (used by backfill). Returns the number of memories created.
     /// On a classifier error the session is *not* marked processed, so a re-run retries it.
     ///
@@ -118,7 +132,7 @@ public enum SessionIngestor {
         } catch {
             // Don't seal a session that failed to classify — a re-run retries it. Surface the failure
             // so backfill can report it instead of an indistinguishable "0 memories".
-            return .failed(reason: "classification failed", terminal: false)
+            return .failed(reason: classificationFailureReason(error), terminal: false)
         }
 
         // ── Validation gate: filter degenerate captures, cap confidence on weak ones ──────────
@@ -231,7 +245,7 @@ public enum SessionIngestor {
             rawMemories = try await classifier.classify(convo, recentMemories: recent)
         } catch {
             // do NOT advance the cursor — these events will be retried
-            return .failed(reason: "classification failed", terminal: false)
+            return .failed(reason: classificationFailureReason(error), terminal: false)
         }
 
         // ── Validation gate: filter degenerate captures, cap confidence on weak ones ──────────
@@ -388,7 +402,7 @@ public enum SessionIngestor {
                 }
             case .failed(let reason, let terminal):
                 failures += 1
-                if reason == "classification failed" { classifierFailures += 1 }
+                if reason.hasPrefix(classificationFailedPrefix) { classifierFailures += 1 }
                 // Missing transcripts (and other terminal failures) won't recover on retry — mark
                 // them error immediately. Transient classifier failures stay pending until the attempt
                 // budget is exhausted.
