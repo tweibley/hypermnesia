@@ -5,6 +5,14 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **Code-reference capture is now on by default.** Edited files become draft code-reference
+  memories (confirmed by repeat sightings) without flipping the Capture toggle first. It's
+  deterministic — no LLM — and lockfiles, secrets, and .gitignore'd paths are already skipped,
+  so the default-off caution bought little. Existing installs keep whatever their saved
+  `captureCodeRefs` setting says; only fresh configs pick up the new default.
+
 ## [0.6.1] — 2026-08-27
 
 ### Fixed

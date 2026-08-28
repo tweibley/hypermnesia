@@ -75,7 +75,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
         notifyOnNewDrafts: Bool = false,
         injectMomentum: Bool = true,
         autoConfirmConfidentCaptures: Bool = true,
-        captureCodeRefs: Bool = false,
+        captureCodeRefs: Bool = true,
         notchEnabled: Bool = true,
         notchOnAgentFinish: Bool = true,
         notchOnNeedsAttention: Bool = true,
