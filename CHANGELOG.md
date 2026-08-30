@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-30
+
 ### Added
 
 - **Diagram gallery easter egg.** If the visual-explainer skill has built its gallery index
