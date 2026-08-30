@@ -60,6 +60,13 @@ public struct AppConfig: Codable, Sendable, Equatable {
     /// Max classifier calls per night across all projects (0 = uncapped). Projects beyond the cap
     /// roll to the next night, most recently active first.
     public var dreamNightlyCallCap: Int
+    /// Easter egg: serve the visual-explainer diagram gallery (~/.agent/diagrams) over HTTP.
+    /// The Settings section only appears once the gallery's index.html exists.
+    public var diagramServerEnabled: Bool
+    /// Local address the diagram server binds ("127.0.0.1" = this Mac only, "0.0.0.0" = LAN).
+    public var diagramServerBind: String
+    /// Diagram server TCP port.
+    public var diagramServerPort: Int
 
     public init(
         classifier: String = "auto",
@@ -86,7 +93,10 @@ public struct AppConfig: Codable, Sendable, Equatable {
         dreamProposeMemories: Bool = true,
         dreamProposeSkills: Bool = true,
         dreamSkillTarget: String = "project",
-        dreamNightlyCallCap: Int = 4
+        dreamNightlyCallCap: Int = 4,
+        diagramServerEnabled: Bool = false,
+        diagramServerBind: String = "127.0.0.1",
+        diagramServerPort: Int = 3742
     ) {
         self.classifier = classifier
         self.geminiModel = geminiModel
@@ -113,6 +123,9 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.dreamProposeSkills = dreamProposeSkills
         self.dreamSkillTarget = dreamSkillTarget
         self.dreamNightlyCallCap = dreamNightlyCallCap
+        self.diagramServerEnabled = diagramServerEnabled
+        self.diagramServerBind = diagramServerBind
+        self.diagramServerPort = diagramServerPort
     }
 
     // Lenient decoding so older/newer config files keep working as fields evolve.
@@ -154,6 +167,13 @@ public struct AppConfig: Codable, Sendable, Equatable {
         dreamProposeSkills = try c.decodeIfPresent(Bool.self, forKey: .dreamProposeSkills) ?? d.dreamProposeSkills
         dreamSkillTarget = try c.decodeIfPresent(String.self, forKey: .dreamSkillTarget) ?? d.dreamSkillTarget
         dreamNightlyCallCap = try c.decodeIfPresent(Int.self, forKey: .dreamNightlyCallCap) ?? d.dreamNightlyCallCap
+        diagramServerEnabled = try c.decodeIfPresent(Bool.self, forKey: .diagramServerEnabled) ?? d.diagramServerEnabled
+        // Self-heal like the model fields: an emptied bind field would bind nothing sensible.
+        let bind = try c.decodeIfPresent(String.self, forKey: .diagramServerBind)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        diagramServerBind = bind.isEmpty ? d.diagramServerBind : bind
+        let port = try c.decodeIfPresent(Int.self, forKey: .diagramServerPort) ?? d.diagramServerPort
+        diagramServerPort = (1...65535).contains(port) ? port : d.diagramServerPort
     }
 }
 

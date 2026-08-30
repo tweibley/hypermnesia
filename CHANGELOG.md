@@ -5,6 +5,14 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Diagram gallery easter egg.** If the visual-explainer skill has built its gallery index
+  (`~/.agent/diagrams/index.html`), a hidden **Diagrams** section appears in Settings with a tiny
+  read-only web server for the gallery — on/off, bind address (this Mac only vs. LAN, loopback by
+  default), and port (default 3742). GET/HEAD only, no directory
+  listings, and every path is symlink-resolved and confined to the gallery folder.
+
 ### Changed
 
 - **Code-reference capture is now on by default.** Edited files become draft code-reference

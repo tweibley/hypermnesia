@@ -73,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Live session status at the notch (skipped in the headless share-render harness).
         if ProcessInfo.processInfo.environment["HYPERMNESIA_SHARE_PREVIEW_DIR"] == nil {
             NotchStatusController.shared.start()
+            // Diagram-gallery easter egg: serves ~/.agent/diagrams when enabled in Settings.
+            DiagramServerController.shared.bootstrap()
         }
         // Keep `hypermnesia` working in Terminal for downloaded installs: the CLI ships inside
         // the bundle, so symlink it into ~/.local/bin on every launch. Refreshing each launch

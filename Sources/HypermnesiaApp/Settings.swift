@@ -7,7 +7,7 @@ import HypermnesiaKit
 // MARK: - Settings window
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case onboarding, cursor, antigravity, classifier, capture, hydration, dreams, notch, storage, about
+    case onboarding, cursor, antigravity, classifier, capture, hydration, dreams, notch, diagrams, storage, about
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -19,6 +19,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .hydration: "Hydration"
         case .dreams: "Dreams"
         case .notch: "Notch"
+        case .diagrams: "Diagrams"
         case .storage: "Storage"
         case .about: "About"
         }
@@ -33,6 +34,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .hydration: "drop.fill"
         case .dreams: "moon.zzz.fill"
         case .notch: "menubar.dock.rectangle"
+        case .diagrams: "wand.and.stars"
         case .storage: "externaldrive"
         case .about: "info.circle"
         }
@@ -51,10 +53,16 @@ struct SettingsView: View {
         return .onboarding
     }()
 
+    /// Diagrams is an easter egg: it only surfaces once the visual-explainer skill has built its
+    /// gallery index (~/.agent/diagrams/index.html) — everyone else never sees the section.
+    private var visibleSections: [SettingsSection] {
+        SettingsSection.allCases.filter { $0 != .diagrams || model.diagramsIndexPresent }
+    }
+
     var body: some View {
         NavigationSplitView {
             List {
-                ForEach(SettingsSection.allCases) { item in
+                ForEach(visibleSections) { item in
                     let selected = section == item
                     Button { section = item } label: {
                         Label(item.title, systemImage: item.symbol)
@@ -81,6 +89,7 @@ struct SettingsView: View {
                     case .hydration: HydrationSettings(model: model)
                     case .dreams: DreamsSettings(model: model)
                     case .notch: NotchSettings(model: model)
+                    case .diagrams: DiagramsSettings(model: model)
                     case .storage: StorageSettings()
                     case .about: AboutSettings(model: model)
                     }
@@ -723,6 +732,83 @@ private struct NotchSettings: View {
                   systemImage: "info.circle")
         }
         .font(.caption).foregroundStyle(.secondary)
+    }
+}
+
+/// The easter-egg section: only reachable once ~/.agent/diagrams/index.html exists (see
+/// `SettingsView.visibleSections`). Serves the visual-explainer gallery over HTTP.
+private struct DiagramsSettings: View {
+    @Bindable var model: SettingsModel
+    private var controller: DiagramServerController { DiagramServerController.shared }
+
+    var body: some View {
+        SectionHeader(
+            title: "Diagram gallery",
+            subtitle: "You found it. Your visual-explainer skill keeps an index of every diagram it draws — flip this on and Hypermnesia serves the gallery in your browser."
+        )
+
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: $model.config.diagramServerEnabled) {
+                    Text("Serve the diagram gallery")
+                    Text("A read-only web server for \(DiagramServer.defaultRoot.path). Nothing else is reachable through it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Divider()
+                Picker(selection: $model.config.diagramServerBind) {
+                    Text("This Mac only (127.0.0.1)").tag("127.0.0.1")
+                    Text("Everyone on your network (0.0.0.0)").tag("0.0.0.0")
+                } label: {
+                    Text("Reachable from")
+                    Text("Anyone who can reach the port can read every diagram — keep it on this Mac unless you mean to share.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!model.config.diagramServerEnabled)
+                HStack {
+                    Text("Port")
+                    TextField("3742", value: $model.config.diagramServerPort, format: .number.grouping(.never))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .multilineTextAlignment(.trailing)
+                }
+                .disabled(!model.config.diagramServerEnabled)
+                Divider()
+                statusRow
+            }
+            .padding(6)
+        }
+
+        Text("The section itself is an easter egg — it only appears because index.html exists in the gallery folder.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder private var statusRow: some View {
+        switch controller.status {
+        case .running:
+            HStack(spacing: 10) {
+                Label {
+                    Text("Serving at \(controller.localURL?.absoluteString ?? "")")
+                        .textSelection(.enabled)
+                } icon: {
+                    Image(systemName: "circle.fill").foregroundStyle(.green).font(.caption2)
+                }
+                Spacer()
+                Button {
+                    if let url = controller.localURL { NSWorkspace.shared.open(url) }
+                } label: { Label("Open in Browser", systemImage: "safari") }
+            }
+            .font(.callout)
+        case .failed(let reason):
+            Label(reason, systemImage: "exclamationmark.triangle.fill")
+                .font(.callout).foregroundStyle(.red)
+        case .starting:
+            Label("Starting…", systemImage: "circle.dotted")
+                .font(.callout).foregroundStyle(.secondary)
+        case .stopped:
+            Label("Not running", systemImage: "circle")
+                .font(.callout).foregroundStyle(.secondary)
+        }
     }
 }
 

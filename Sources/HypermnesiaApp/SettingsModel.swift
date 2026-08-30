@@ -50,6 +50,9 @@ final class SettingsModel {
     var antigravityHooksBinaryMissing = false
     var statusMessage: String?
     var configPersistenceError: String?
+    /// Gates the hidden Diagrams section: true once the visual-explainer skill has built its
+    /// gallery index at ~/.agent/diagrams/index.html.
+    var diagramsIndexPresent = DiagramServer.indexExists()
 
     enum CLIToolState: Equatable {
         case checking
@@ -327,6 +330,7 @@ final class SettingsModel {
     }
 
     func refreshSetupStatus() {
+        diagramsIndexPresent = DiagramServer.indexExists()
         hooksInstalled = HookInstaller.isInstalled()
         hooksBinaryMissing = HookInstaller.hasMissingBinary()
         recallGuideInstalled = MemoryGuideInstaller.isInstalled()
