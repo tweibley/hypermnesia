@@ -5,6 +5,16 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-09-01
+
+### Changed
+
+- **The notch status display no longer burns CPU when nothing is happening.** Its 2-second
+  safety tick was re-reading and re-decoding the whole session-event log tail and re-rendering
+  the panel even when nothing had changed — a small but constant drain (and allocation churn)
+  for an app that runs all day. The decoded log is now cached until the file actually changes,
+  and an unchanged tick skips the re-render entirely.
+
 ## [0.7.0] — 2026-08-30
 
 ### Added
