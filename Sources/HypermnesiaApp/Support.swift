@@ -44,12 +44,18 @@ extension ShapeStyle where Self == Color {
     static var critical: Color { Color(hex: "#EF4444") }
 }
 
+// Cached per case: `color` is hit per node and per edge endpoint on every graph frame, and
+// `Color(hex:)` runs a Scanner parse — far too heavy to repeat 60×/s.
 extension MemoryType {
-    var color: Color { Color(hex: colorHex) }
+    var color: Color { Self.colorByCase[self] ?? .gray }
+    private static let colorByCase: [MemoryType: Color] = Dictionary(
+        uniqueKeysWithValues: allCases.map { ($0, Color(hex: $0.colorHex)) })
 }
 
 extension DecayLevel {
-    var color: Color { Color(hex: colorHex) }
+    var color: Color { Self.colorByCase[self] ?? .gray }
+    private static let colorByCase: [DecayLevel: Color] = Dictionary(
+        uniqueKeysWithValues: allCases.map { ($0, Color(hex: $0.colorHex)) })
 }
 
 /// Human-friendly project name: `github.com/acme/app` → `acme/app`, `path:/Users/x/proj` → `proj`.

@@ -57,7 +57,10 @@ final class GraphModel {
     private var hasFreshNodes = false
     private var focusID: String?
     private var temperature: CGFloat = 1
-    private var indexById: [String: Int] = [:]
+    /// Never read by the view, so mutating it doesn't invalidate the Canvas — it only meters how
+    /// often `time` (which the view DOES read) advances.
+    private var twinkleBeat = 0
+    private(set) var indexById: [String: Int] = [:]
     private var neighbors: [[Int]] = []
     private var signature: Int = 0   // detect when the memory set actually changed
 
@@ -195,7 +198,13 @@ final class GraphModel {
                 nodes[i].alpha += (nodes[i].targetAlpha - nodes[i].alpha) * 0.18
             }
         }
-        if twinkling { time += 1 / 60 }
+        if twinkling {
+            // The shimmer is a slow sine (1.6 rad/s) — advancing its clock every 4th tick reads
+            // the same but cuts the twinkle-only redraw rate (and its full-Canvas re-render,
+            // Observation tracking, and GPU encode) from 60fps to 15fps.
+            twinkleBeat += 1
+            if twinkleBeat % 4 == 0 { time += 4.0 / 60 }
+        }
     }
 
     func position(of id: String) -> CGPoint? {

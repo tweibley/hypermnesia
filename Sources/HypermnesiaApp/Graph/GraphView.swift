@@ -17,6 +17,8 @@ struct GraphView: View {
     @State private var userMovedCamera = false
     @State private var hoveredID: String?
     @State private var ticker = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
+    /// Window fully hidden behind others — same battery-burn guard as BrainMRIView's TimelineView.
+    @State private var isOccluded = false
 
     var body: some View {
         GeometryReader { geo in
@@ -41,8 +43,14 @@ struct GraphView: View {
                 .onChange(of: app.selectedMemoryID) { _, id in graph.setFocus(id) }
                 .onExitCommand { app.selectedMemoryID = nil }
                 .onReceive(ticker) { _ in
+                    guard !isOccluded else { return }
                     graph.tick(reduceMotion: reduceMotion)
                     if !userMovedCamera { fitCamera() }
+                }
+                // A canvas animating behind other windows is pure battery burn — pause when hidden.
+                .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { note in
+                    guard let window = note.object as? NSWindow, window.canBecomeMain else { return }
+                    isOccluded = !window.occlusionState.contains(.visible)
                 }
         }
     }
@@ -78,20 +86,61 @@ struct GraphView: View {
 
     // MARK: canvas
 
+    /// One frame's draw state, read exactly once per render. The per-node and per-edge loops run
+    /// hot (potentially every frame while the graph twinkles), and every access to an @Observable
+    /// or @State property inside the Canvas closure pays Observation tracking / keypath hashing —
+    /// profiled as the dominant main-thread cost. Snapshotting collapses that to one read each;
+    /// SwiftUI still registers the dependencies through those single reads.
+    private struct Frame {
+        let nodes: [LayoutNode]
+        let edges: [MemoryEdge]
+        let clusters: [GraphCluster]
+        let labeledIDs: Set<String>
+        let index: [String: Int]
+        let time: CGFloat
+        let zoom: CGFloat
+        let pan: CGSize
+        let worldCenter: CGPoint
+        let viewCenter: CGPoint
+        let selectedID: String?
+        let hoveredID: String?
+        let reduceMotion: Bool
+
+        func toScreen(_ p: CGPoint) -> CGPoint {
+            CGPoint(x: (p.x - worldCenter.x) * zoom + viewCenter.x + pan.width,
+                    y: (p.y - worldCenter.y) * zoom + viewCenter.y + pan.height)
+        }
+        func node(for id: String) -> LayoutNode? { index[id].map { nodes[$0] } }
+        func position(of id: String) -> CGPoint? { index[id].map { nodes[$0].position } }
+        func edgeAlpha(_ edge: MemoryEdge) -> CGFloat {
+            guard let s = index[edge.source], let t = index[edge.target] else { return 0 }
+            return min(nodes[s].alpha, nodes[t].alpha)
+        }
+        func colorFor(_ id: String) -> Color { node(for: id)?.type.color ?? .secondary }
+        func nodeScreenRadius(_ id: String) -> CGFloat { (node(for: id)?.radius ?? 10) * zoom }
+    }
+
     private var canvas: some View {
         Canvas { ctx, size in
             let dark = colorScheme == .dark
-            if dark { drawStarfield(ctx, size: size) }
-            if graph.mode == .solarSystem { drawOrbits(ctx) }
-            if graph.mode == .constellation { drawHulls(ctx) }
-            drawEdges(ctx)
-            drawNodes(ctx, dark: dark)
-            drawLabels(ctx, dark: dark)
+            let mode = graph.mode
+            let frame = Frame(
+                nodes: graph.nodes, edges: graph.edges, clusters: graph.clusters,
+                labeledIDs: graph.labeledIDs, index: graph.indexById, time: graph.time,
+                zoom: zoom, pan: pan, worldCenter: worldCenter, viewCenter: viewCenter,
+                selectedID: app.selectedMemoryID, hoveredID: hoveredID,
+                reduceMotion: reduceMotion)
+            if dark { drawStarfield(ctx, size: size, pan: frame.pan) }
+            if mode == .solarSystem { drawOrbits(ctx, frame) }
+            if mode == .constellation { drawHulls(ctx, frame) }
+            drawEdges(ctx, frame)
+            drawNodes(ctx, frame, dark: dark)
+            drawLabels(ctx, frame, dark: dark)
         }
     }
 
     /// Sparse deterministic background stars with a gentle parallax (dark mode only).
-    private func drawStarfield(_ ctx: GraphicsContext, size: CGSize) {
+    private func drawStarfield(_ ctx: GraphicsContext, size: CGSize, pan: CGSize) {
         var seed: UInt64 = 0x9E37_79B9
         func rand() -> CGFloat {
             seed = seed &* 6364136223846793005 &+ 1442695040888963407
@@ -111,31 +160,31 @@ struct GraphView: View {
         }
     }
 
-    private func drawOrbits(_ ctx: GraphicsContext) {
-        let c = toScreen(worldCenter)
+    private func drawOrbits(_ ctx: GraphicsContext, _ frame: Frame) {
+        let c = frame.toScreen(frame.worldCenter)
         for i in 1...MemoryType.allCases.count {
-            let r = CGFloat(i) * 70 * zoom
+            let r = CGFloat(i) * 70 * frame.zoom
             ctx.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)),
                        with: .color(.secondary.opacity(0.10)), lineWidth: 1)
         }
     }
 
     /// Soft constellation hulls: a fat round-joined stroke over the convex hull reads as a blob.
-    private func drawHulls(_ ctx: GraphicsContext) {
+    private func drawHulls(_ ctx: GraphicsContext, _ frame: Frame) {
         var placedNames: [CGRect] = []
-        for cluster in graph.clusters {
-            let points = cluster.members.map { toScreen(graph.nodes[$0].position) }
+        for cluster in frame.clusters {
+            let points = cluster.members.map { frame.toScreen(frame.nodes[$0].position) }
             let hull = GraphView.convexHull(points)
             guard hull.count >= 2 else { continue }
-            let alpha = cluster.members.map { graph.nodes[$0].alpha }.max() ?? 1
+            let alpha = cluster.members.map { frame.nodes[$0].alpha }.max() ?? 1
             var path = Path()
             path.addLines(hull)
             path.closeSubpath()
-            let style = StrokeStyle(lineWidth: 88 * zoom, lineCap: .round, lineJoin: .round)
+            let style = StrokeStyle(lineWidth: 88 * frame.zoom, lineCap: .round, lineJoin: .round)
             ctx.stroke(path, with: .color(cluster.color.opacity(0.055 * alpha)), style: style)
             ctx.fill(path, with: .color(cluster.color.opacity(0.055 * alpha)))
 
-            if let name = cluster.name, zoom > 0.4, alpha > 0.5 {
+            if let name = cluster.name, frame.zoom > 0.4, alpha > 0.5 {
                 let top = hull.min { $0.y < $1.y } ?? hull[0]
                 let text = ctx.resolve(
                     Text(name)
@@ -143,7 +192,7 @@ struct GraphView: View {
                         .kerning(0.8)
                         .foregroundStyle(cluster.color.opacity(0.7 * alpha)))
                 let size = text.measure(in: CGSize(width: 300, height: 30))
-                let at = CGPoint(x: top.x, y: top.y - 54 * zoom)
+                let at = CGPoint(x: top.x, y: top.y - 54 * frame.zoom)
                 let rect = CGRect(x: at.x - size.width / 2, y: at.y - size.height,
                                   width: size.width, height: size.height).insetBy(dx: -8, dy: -8)
                 if placedNames.contains(where: { $0.intersects(rect) }) { continue }
@@ -153,13 +202,13 @@ struct GraphView: View {
         }
     }
 
-    private func drawEdges(_ ctx: GraphicsContext) {
-        let zoomFade = min(1, zoom * 1.3)
-        for edge in graph.edges {
-            guard let wa = graph.position(of: edge.source), let wb = graph.position(of: edge.target)
+    private func drawEdges(_ ctx: GraphicsContext, _ frame: Frame) {
+        let zoomFade = min(1, frame.zoom * 1.3)
+        for edge in frame.edges {
+            guard let wa = frame.position(of: edge.source), let wb = frame.position(of: edge.target)
             else { continue }
-            let a = toScreen(wa), b = toScreen(wb)
-            let alpha = graph.edgeAlpha(edge) * zoomFade
+            let a = frame.toScreen(wa), b = frame.toScreen(wb)
+            let alpha = frame.edgeAlpha(edge) * zoomFade
             guard alpha > 0.02 else { continue }
             let lineage = edge.relationship != .relatedTo
             let base = (lineage ? 0.42 : 0.22) * alpha
@@ -173,8 +222,8 @@ struct GraphView: View {
             path.move(to: a)
             path.addQuadCurve(to: b, control: control)
 
-            let colorA = colorFor(edge.source).opacity(base)
-            let colorB = colorFor(edge.target).opacity(base)
+            let colorA = frame.colorFor(edge.source).opacity(base)
+            let colorB = frame.colorFor(edge.target).opacity(base)
             let dash = (edge.relationship.lineDash ?? []).map { CGFloat($0 * 1.6) }
             ctx.stroke(
                 path,
@@ -182,26 +231,26 @@ struct GraphView: View {
                 style: StrokeStyle(lineWidth: lineage ? 1.3 : 1, dash: dash))
             if edge.relationship.hasArrow {
                 arrowhead(ctx, from: control, to: b, alpha: base,
-                          inset: nodeScreenRadius(edge.target) + 5)
+                          inset: frame.nodeScreenRadius(edge.target) + 5)
             }
         }
     }
 
-    private func drawNodes(_ ctx: GraphicsContext, dark: Bool) {
-        for node in graph.nodes {
-            let p = toScreen(node.position)
-            let r = node.radius * zoom
+    private func drawNodes(_ ctx: GraphicsContext, _ frame: Frame, dark: Bool) {
+        for node in frame.nodes {
+            let p = frame.toScreen(node.position)
+            let r = node.radius * frame.zoom
             let dim: CGFloat = node.decay == .obsolete ? 0.3
                 : (node.decay == .dormant ? 0.55 : (node.decay == .stale ? 0.8 : 1.0))
             let alpha = node.alpha * dim
             guard alpha > 0.02 else { continue }
-            let selected = app.selectedMemoryID == node.id
-            let hovered = hoveredID == node.id
+            let selected = frame.selectedID == node.id
+            let hovered = frame.hoveredID == node.id
             let color = node.type.color
 
             // Twinkle: fresh memories shimmer; everything else glows steadily.
-            let twinkle = reduceMotion ? 0
-                : node.freshness * 0.30 * (0.5 + 0.5 * sin(graph.time * 1.6 + node.twinklePhase))
+            let twinkle = frame.reduceMotion ? 0
+                : node.freshness * 0.30 * (0.5 + 0.5 * sin(frame.time * 1.6 + node.twinklePhase))
             var glow = (0.34 + 0.30 * node.importance + twinkle) * alpha
             if selected || hovered { glow = min(1, glow + 0.30) }
             let glowR = r * (selected ? 3.4 : 2.7)
@@ -237,33 +286,33 @@ struct GraphView: View {
         }
     }
 
-    private func drawLabels(_ ctx: GraphicsContext, dark: Bool) {
-        guard zoom > 0.42 else { return }
+    private func drawLabels(_ ctx: GraphicsContext, _ frame: Frame, dark: Bool) {
+        guard frame.zoom > 0.42 else { return }
         // Selected/hovered first, then by importance; a label that would overlap an
         // already-placed one is dropped, so dense areas stay readable instead of stacking.
-        let candidates = graph.nodes
+        let candidates = frame.nodes
             .filter { node in
-                let active = app.selectedMemoryID == node.id || hoveredID == node.id
-                return active || (graph.labeledIDs.contains(node.id) && node.alpha > 0.5)
+                let active = frame.selectedID == node.id || frame.hoveredID == node.id
+                return active || (frame.labeledIDs.contains(node.id) && node.alpha > 0.5)
             }
             .sorted { a, b in
-                let aActive = app.selectedMemoryID == a.id || hoveredID == a.id
-                let bActive = app.selectedMemoryID == b.id || hoveredID == b.id
+                let aActive = frame.selectedID == a.id || frame.hoveredID == a.id
+                let bActive = frame.selectedID == b.id || frame.hoveredID == b.id
                 if aActive != bActive { return aActive }
                 return a.importance > b.importance
             }
         var placed: [CGRect] = []
         for node in candidates {
-            let selected = app.selectedMemoryID == node.id
-            let hovered = hoveredID == node.id
+            let selected = frame.selectedID == node.id
+            let hovered = frame.hoveredID == node.id
             let alpha = node.alpha * (node.decay == .obsolete ? 0.5 : 1)
-            let p = toScreen(node.position)
+            let p = frame.toScreen(node.position)
             let text = ctx.resolve(
                 Text(label(node.title))
                     .font(.system(size: 10, weight: selected || hovered ? .semibold : .regular))
                     .foregroundStyle((dark ? Color.white : .black).opacity((selected || hovered ? 0.95 : 0.72) * alpha)))
             let size = text.measure(in: CGSize(width: 240, height: 40))
-            let origin = CGPoint(x: p.x - size.width / 2, y: p.y + node.radius * zoom + 7)
+            let origin = CGPoint(x: p.x - size.width / 2, y: p.y + node.radius * frame.zoom + 7)
             let bg = CGRect(origin: origin, size: size).insetBy(dx: -5, dy: -2.5)
             let clearance = bg.insetBy(dx: -4, dy: -4)
             if !(selected || hovered), placed.contains(where: { $0.intersects(clearance) }) { continue }
@@ -276,14 +325,6 @@ struct GraphView: View {
 
     private func label(_ title: String) -> String {
         title.count <= 28 ? title : String(title.prefix(27)) + "…"
-    }
-
-    private func colorFor(_ id: String) -> Color {
-        graph.node(for: id)?.type.color ?? .secondary
-    }
-
-    private func nodeScreenRadius(_ id: String) -> CGFloat {
-        (graph.node(for: id)?.radius ?? 10) * zoom
     }
 
     private func arrowhead(_ ctx: GraphicsContext, from a: CGPoint, to b: CGPoint,
