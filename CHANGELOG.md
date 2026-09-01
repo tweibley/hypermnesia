@@ -5,6 +5,17 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-09-01
+
+### Changed
+
+- **The memory graph is dramatically cheaper to keep open.** Fresh memories' twinkle shimmer was
+  redrawing the whole canvas at 60fps indefinitely, and each frame paid avoidable per-node
+  bookkeeping (observation tracking, hex color re-parsing). The shimmer now redraws at 15fps
+  (visually identical), per-frame state is read once instead of per node/edge, colors are cached,
+  and rendering pauses entirely while the window is hidden behind others. Layout physics still
+  runs at the full 60fps, so dragging and re-layout feel unchanged.
+
 ## [0.7.1] — 2026-09-01
 
 ### Changed
