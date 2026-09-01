@@ -61,7 +61,9 @@ public enum MemoryActivityLog {
     private static let cacheLock = NSLock()
     nonisolated(unsafe) private static var decodedTailCache: DecodedTailCache?
 
-    private struct FileSignature: Equatable {
+    /// Cheap change detector for cross-process cache invalidation: appends grow `size`, rotation
+    /// truncates it, and both touch `modifiedAt`. Internal so `SessionEventLog` shares it.
+    struct FileSignature: Equatable {
         let size: UInt64
         let modifiedAt: TimeInterval
     }
@@ -205,7 +207,7 @@ public enum MemoryActivityLog {
         return events
     }
 
-    private static func fileSignature(url: URL) -> FileSignature? {
+    static func fileSignature(url: URL) -> FileSignature? {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let size = attrs[.size] as? NSNumber else {
             return nil

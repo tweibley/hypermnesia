@@ -71,6 +71,10 @@ final class NotchPanel {
     private var pendingHide: DispatchWorkItem?
     private var pendingShrink: DispatchWorkItem?
     private var pendingCollapse: DispatchWorkItem?
+    /// What the last `layout` rendered against, so an unchanged steady-state tick can skip the
+    /// whole re-render/re-fit. The screen frame matters too: two screens can produce equal
+    /// geometry (same `topY`/widths) at different positions.
+    private var lastPlacement: (geometry: NotchGeometry, screenFrame: NSRect)?
 
     /// How long the retract/row-exit springs get before the window vanishes or the frame snaps in.
     private static let exitGrace: TimeInterval = 0.35
@@ -104,6 +108,15 @@ final class NotchPanel {
         guard let screen = Self.targetScreen() else { panel.orderOut(nil); return }
         pendingHide?.cancel()
         pendingHide = nil
+
+        // The 2s safety tick and app-switch refreshes usually deliver exactly what's already on
+        // screen — skip the SwiftUI re-render and window re-fit. Not while the working strip is
+        // hover-expanded: its elapsed-time labels only advance when the root view is re-set.
+        if panel.isVisible, !workingExpanded, newCards == cards, newWorking == workingCards,
+           let placement = lastPlacement, placement.geometry == NotchGeometry(screen: screen),
+           placement.screenFrame == screen.frame {
+            return
+        }
 
         cards = newCards
         workingCards = newWorking
@@ -179,6 +192,7 @@ final class NotchPanel {
     /// shrinking (height or width) waits out the exit springs so outgoing rows aren't clipped.
     private func layout(on screen: NSScreen, visible: Bool, deferShrink: Bool) {
         let geometry = NotchGeometry(screen: screen)
+        lastPlacement = (geometry, screen.frame)
         setRoot(geometry: geometry, visible: visible)
         hosting.layoutSubtreeIfNeeded()
         let size = hosting.fittingSize

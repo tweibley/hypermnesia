@@ -53,6 +53,26 @@ struct SessionEventTests {
         #expect(perms?.int16Value == 0o600)
     }
 
+    @Test("recent reflects appends that land after a cached read")
+    func recentInvalidatesCacheOnAppend() throws {
+        let dir = try tempDir("secache")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let first = event(at: Date(timeIntervalSince1970: 1_784_000_000), kind: .finished, session: "s1")
+        SessionEventLog.append(first, in: dir)
+        #expect(SessionEventLog.recent(in: dir) == [first])         // warms the decoded-tail cache
+        #expect(SessionEventLog.recent(in: dir) == [first])         // served from the cache
+
+        // A later append (in real life: a hook in another process) must invalidate the cache.
+        let second = event(at: Date(timeIntervalSince1970: 1_784_000_060), kind: .attention, session: "s2",
+                           message: "Claude needs your permission to use Bash")
+        SessionEventLog.append(second, in: dir)
+        #expect(SessionEventLog.recent(in: dir) == [first, second])
+
+        // And the limit still windows the cached tail, newest last.
+        #expect(SessionEventLog.recent(limit: 1, in: dir) == [second])
+    }
+
     @Test("touch creates an empty log file for the watcher to attach to")
     func touchCreates() throws {
         let dir = try tempDir("setouch")

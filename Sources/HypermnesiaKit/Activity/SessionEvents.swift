@@ -96,6 +96,13 @@ public enum SessionEventLog {
     static let maxFileBytes = 2_000_000
     static let rotationRetainBytes = 256_000
 
+    private static let cacheLock = NSLock()
+    /// Decoded tail keyed by file identity, same discipline as `MemoryActivityLog.decodedTailCache`:
+    /// the notch polls `recent()` every 2s but the log only changes when a hook appends or rotation
+    /// truncates — both move the size/mtime signature, including writes from other processes.
+    nonisolated(unsafe) private static var decodedTailCache:
+        (url: URL, signature: MemoryActivityLog.FileSignature, events: [SessionEvent])?
+
     public static func fileURL(in directory: URL = StoreLocation.supportDirectory) -> URL {
         directory.appendingPathComponent(filename)
     }
@@ -131,17 +138,36 @@ public enum SessionEventLog {
 
     /// Recent events in append order (the tail window of the log).
     public static func recent(limit: Int = 400, in directory: URL = StoreLocation.supportDirectory) -> [SessionEvent] {
-        guard limit > 0,
-              let data = MemoryActivityLog.tailData(url: fileURL(in: directory), maxBytes: maxReadBytes),
-              let text = String(data: data, encoding: .utf8) else { return [] }
+        guard limit > 0 else { return [] }
+        let url = fileURL(in: directory)
+        guard let signature = MemoryActivityLog.fileSignature(url: url) else {
+            cacheLock.lock()
+            decodedTailCache = nil
+            cacheLock.unlock()
+            return []
+        }
+
+        cacheLock.lock()
+        if let cache = decodedTailCache, cache.url == url, cache.signature == signature {
+            let events = cache.events
+            cacheLock.unlock()
+            return Array(events.suffix(limit))
+        }
+        cacheLock.unlock()
+
+        guard let data = MemoryActivityLog.tailData(url: url, maxBytes: maxReadBytes) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         var events: [SessionEvent] = []
-        for line in text.split(whereSeparator: \.isNewline) {
-            guard let lineData = line.data(using: .utf8),
-                  let event = try? decoder.decode(SessionEvent.self, from: lineData) else { continue }
+        // Split the raw bytes — the JSONL is ASCII-newline framed, so there's no reason to pay for
+        // a String round-trip and grapheme-aware scanning per read.
+        for line in data.split(separator: UInt8(ascii: "\n")) {
+            guard let event = try? decoder.decode(SessionEvent.self, from: line) else { continue }
             events.append(event)
         }
+        cacheLock.lock()
+        decodedTailCache = (url, signature, events)
+        cacheLock.unlock()
         return Array(events.suffix(limit))
     }
 
