@@ -5,6 +5,23 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-09-04
+
+### Changed
+
+- **Background work no longer burns CPU between sessions.** Three fixes from profiling the
+  running app:
+  - The conflict sweep after each capture drain re-tokenized every pair of confirmed memories
+    (quadratic in store size, seconds of full-core work per drain). Token sets are now computed
+    once per memory per pass, and the near-duplicate check only runs on pairs that already match
+    on topic.
+  - Daily maintenance re-enumerated every Claude Code transcript on disk once per project to map
+    projects back to their repos. The scan is now shared and cached for a few minutes, so a pass
+    over all projects walks the transcript tree once.
+  - The 20-second capture-drain tick spawned a login shell each time just to re-locate the
+    classifier CLI. The lookup is now cached (uninstalls are still noticed immediately;
+    fresh installs are picked up within a minute).
+
 ## [0.7.2] — 2026-09-01
 
 ### Changed
