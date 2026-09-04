@@ -40,7 +40,12 @@ public enum DedupEngine {
 
     /// Jaccard similarity (shared / total unique) of two texts' meaningful tokens.
     public static func similarity(_ a: String, _ b: String) -> Double {
-        let ta = tokens(a), tb = tokens(b)
+        similarity(tokens(a), tokens(b))
+    }
+
+    /// Jaccard over already-tokenized sets — the cheap half of `similarity` once a
+    /// `DedupTokenCache` has paid the tokenization.
+    public static func similarity(_ ta: Set<String>, _ tb: Set<String>) -> Double {
         let union = ta.union(tb).count
         guard union > 0 else { return 0 }
         return Double(ta.intersection(tb).count) / Double(union)
@@ -51,14 +56,24 @@ public enum DedupEngine {
     /// Whether two memories are near-duplicates (threshold lowered when commits match).
     /// CodeRefs match on exact `filePath` — Jaccard on titles would collide same basenames in
     /// different directories (`Sources/Foo.swift` vs `Tests/Foo.swift`).
-    public static func isDuplicate(_ a: MemoryNode, _ b: MemoryNode) -> Bool {
+    ///
+    /// Pass a `DedupTokenCache` from any caller that compares one node against many (or many
+    /// against many): tokenization is per-character Unicode-property work and dominates an O(N²)
+    /// pass when recomputed per pair.
+    public static func isDuplicate(_ a: MemoryNode, _ b: MemoryNode, cache: DedupTokenCache? = nil) -> Bool {
         if a.type == .codeRef, b.type == .codeRef,
            case .codeRef(let ad) = a.data, case .codeRef(let bd) = b.data {
             return ad.filePath == bd.filePath
         }
         let sameCommit = a.commitSha != nil && a.commitSha == b.commitSha
         let threshold = sameCommit ? sameCommitThreshold : baseThreshold
-        return similarity(text(a), text(b)) >= threshold
+        guard let cache else { return similarity(text(a), text(b)) >= threshold }
+        let ta = cache.textTokens(a), tb = cache.textTokens(b)
+        // Jaccard is bounded above by |smaller| / |larger| — when even the bound misses the
+        // threshold, skip the intersection (and its per-element string hashing) entirely.
+        let hi = max(ta.count, tb.count)
+        guard hi > 0, Double(min(ta.count, tb.count)) / Double(hi) >= threshold else { return false }
+        return similarity(ta, tb) >= threshold
     }
 
     /// The first existing memory (same type, not deleted, not the candidate) that duplicates
@@ -66,18 +81,46 @@ public enum DedupEngine {
     public static func duplicate(
         of candidate: MemoryNode, in existing: [MemoryNode], statuses: Set<MemoryStatus>? = nil
     ) -> MemoryNode? {
-        existing.first { other in
+        let cache = DedupTokenCache()
+        return existing.first { other in
             other.id != candidate.id
                 && !other.isDeleted
                 && other.type == candidate.type
                 && (statuses?.contains(other.status) ?? true)
-                && isDuplicate(candidate, other)
+                && isDuplicate(candidate, other, cache: cache)
         }
     }
 
     /// Layer 2: draft memories similar to `node` (for purge-on-confirm).
     public static func similarDrafts(to node: MemoryNode, among existing: [MemoryNode]) -> [MemoryNode] {
-        existing.filter { $0.id != node.id && $0.status == .draft && !$0.isDeleted
-            && $0.type == node.type && isDuplicate(node, $0) }
+        let cache = DedupTokenCache()
+        return existing.filter { $0.id != node.id && $0.status == .draft && !$0.isDeleted
+            && $0.type == node.type && isDuplicate(node, $0, cache: cache) }
+    }
+}
+
+/// Memoizes per-node token sets across a comparison pass, keyed by node id. Valid for the life of
+/// one pass: nothing in the dedup/conflict paths mutates a node's title or summary mid-pass (the
+/// conflict sweep only touches supersede links and timestamps).
+public final class DedupTokenCache {
+    private var text: [String: Set<String>] = [:]
+    private var title: [String: Set<String>] = [:]
+
+    public init() {}
+
+    /// Tokens of `title + " " + summary` (what `isDuplicate` compares).
+    func textTokens(_ node: MemoryNode) -> Set<String> {
+        if let cached = text[node.id] { return cached }
+        let computed = DedupEngine.tokens(node.title + " " + node.summary)
+        text[node.id] = computed
+        return computed
+    }
+
+    /// Tokens of the title alone (what the conflict engine's same-topic score compares).
+    func titleTokens(_ node: MemoryNode) -> Set<String> {
+        if let cached = title[node.id] { return cached }
+        let computed = DedupEngine.tokens(node.title)
+        title[node.id] = computed
+        return computed
     }
 }

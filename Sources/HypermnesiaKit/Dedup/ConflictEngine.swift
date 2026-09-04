@@ -26,25 +26,35 @@ public enum ConflictEngine {
     /// - Facts: same `category` + `key`, different `value` — a revision, detected deterministically.
     /// - Decisions/conventions: title similarity ≥ `titleConflictThreshold` while NOT being a
     ///   near-duplicate overall (a duplicate is reinforcement, not conflict). Best match wins.
-    public static func conflict(of candidate: MemoryNode, in existing: [MemoryNode]) -> MemoryNode? {
+    ///
+    /// The near-duplicate exclusion is evaluated last, only for pairs that already match on
+    /// topic (fact key, or title score over threshold) — running it for every same-type pair
+    /// re-tokenized the whole store per candidate and dominated sweep profiles. Callers looping
+    /// over many candidates (the sweep) share one `cache` so each node tokenizes once per pass.
+    public static func conflict(
+        of candidate: MemoryNode, in existing: [MemoryNode],
+        cache: DedupTokenCache = DedupTokenCache()
+    ) -> MemoryNode? {
         guard conflictableTypes.contains(candidate.type) else { return nil }
-        let others = existing.filter { other in
+        let live = existing.filter { other in
             other.id != candidate.id
                 && !other.isDeleted
                 && !other.isSuperseded
                 && other.type == candidate.type
-                && !DedupEngine.isDuplicate(candidate, other)
         }
         if case .fact(let fact) = candidate.data {
-            return others.first { other in
+            return live.first { other in
                 guard case .fact(let old) = other.data else { return false }
                 return old.category == fact.category && old.key == fact.key && old.value != fact.value
+                    && !DedupEngine.isDuplicate(candidate, other, cache: cache)
             }
         }
-        return others
-            .map { (node: $0, score: DedupEngine.similarity(candidate.title, $0.title)) }
+        let titleTokens = cache.titleTokens(candidate)
+        return live
+            .map { (node: $0, score: DedupEngine.similarity(titleTokens, cache.titleTokens($0))) }
             .filter { $0.score >= titleConflictThreshold }
-            .max { $0.score < $1.score }?
+            .sorted { $0.score > $1.score }   // stable: score ties keep array order, like max(by:) did
+            .first { !DedupEngine.isDuplicate(candidate, $0.node, cache: cache) }?
             .node
     }
 
@@ -69,11 +79,14 @@ public enum ConflictEngine {
         var working = Dictionary(uniqueKeysWithValues: newestFirst.map { ($0.id, $0) })
         var retired = Set<String>()
         var applied = 0
+        // One token cache for the whole pass: sweep only mutates supersede links and timestamps,
+        // never the title/summary the tokens derive from.
+        let cache = DedupTokenCache()
         for snapshot in newestFirst {
             guard var newer = working[snapshot.id], newer.supersedesId == nil else { continue }
             let olderPool = newestFirst.compactMap { working[$0.id] }
                 .filter { $0.createdAt < newer.createdAt && !retired.contains($0.id) }
-            guard let match = conflict(of: newer, in: olderPool),
+            guard let match = conflict(of: newer, in: olderPool, cache: cache),
                   var older = working[match.id] else { continue }
             newer.supersedesId = older.id
             older.supersededById = newer.id
