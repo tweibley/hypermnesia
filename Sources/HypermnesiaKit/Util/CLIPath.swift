@@ -17,7 +17,37 @@ public enum CLIPath {
 
     /// Absolute path for `name`, or `nil` when the tool genuinely isn't installed — the
     /// availability probe behind `Classifiers.autoKind`.
+    ///
+    /// Memoized: the app's auto-drain re-resolves the classifier CLI every tick, and an uncached
+    /// miss spawns a login shell (sourcing the user's profile) each time. A hit is revalidated
+    /// with a stat so an uninstalled tool is noticed immediately; a miss is retried after
+    /// `missRetryInterval` so installing the tool mid-run gets picked up without a relaunch.
     public static func find(_ name: String, fallbacks: [String] = []) -> String? {
+        cacheLock.lock()
+        if let cached = findCache[name] {
+            if let path = cached.path, FileManager.default.isExecutableFile(atPath: path) {
+                cacheLock.unlock()
+                return path
+            }
+            if cached.path == nil, Date().timeIntervalSince(cached.at) < missRetryInterval {
+                cacheLock.unlock()
+                return nil
+            }
+        }
+        cacheLock.unlock()
+
+        let found = findUncached(name, fallbacks: fallbacks)
+        cacheLock.lock()
+        findCache[name] = (Date(), found)
+        cacheLock.unlock()
+        return found
+    }
+
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var findCache: [String: (at: Date, path: String?)] = [:]
+    private static let missRetryInterval: TimeInterval = 60
+
+    private static func findUncached(_ name: String, fallbacks: [String]) -> String? {
         // Fast path: already reachable on the current PATH (the CLI/hook context).
         if let onPath = which(name, shell: nil) { return onPath }
 

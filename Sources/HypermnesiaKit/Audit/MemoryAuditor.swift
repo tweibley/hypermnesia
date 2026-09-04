@@ -264,15 +264,63 @@ public enum MemoryAuditor {
 
     // MARK: - Repo path resolution
 
+    /// Distinct session cwds (newest session first) plus lazily resolved project ids per cwd.
+    /// Building the cwd list means enumerating every transcript under ~/.claude/projects and
+    /// reading each one's header — expensive enough (a profiled maintenance pass spent most of its
+    /// time in that walk) that callers looping over projects (daily maintenance, dreams) and the
+    /// per-render UI lookups must share one scan instead of re-walking per call.
+    private struct CwdIndex {
+        let builtAt: Date
+        let cwds: [String]
+        /// Filled on demand — each entry costs git subprocess spawns, and a lookup that matches
+        /// early never pays for the rest.
+        var projectIdByCwd: [String: String] = [:]
+    }
+    private static let cwdIndexLock = NSLock()
+    nonisolated(unsafe) private static var cwdIndex: CwdIndex?
+    /// New sessions (and with them, first-time-seen projects) become resolvable on the next
+    /// rebuild — a few minutes of latency, against daily/maintenance-cadence callers.
+    private static let cwdIndexTTL: TimeInterval = 5 * 60
+
     /// The local working-tree path for a project id, if it can be determined: `path:` ids carry it
     /// directly; for git-remote ids, look it up from a recent session's cwd.
     public static func repoPath(forProjectId projectId: String) -> String? {
         if projectId.hasPrefix("path:") { return String(projectId.dropFirst(5)) }
-        var resolved = Set<String>()   // distinct cwds only, so git runs at most once per directory
-        for transcript in ClaudeCodeSessions.allTranscripts().reversed() {   // newest first
-            guard let cwd = ClaudeCodeSessions.firstCwd(of: transcript.url),
-                  resolved.insert(cwd).inserted else { continue }
-            if ProjectIdentity.resolve(cwd: cwd) == projectId {
+
+        cwdIndexLock.lock()
+        var index: CwdIndex
+        if let cached = cwdIndex, Date().timeIntervalSince(cached.builtAt) < cwdIndexTTL {
+            index = cached
+            cwdIndexLock.unlock()
+        } else {
+            cwdIndexLock.unlock()
+            var seen = Set<String>()   // distinct cwds only, so git runs at most once per directory
+            var cwds: [String] = []
+            for transcript in ClaudeCodeSessions.allTranscripts().reversed() {   // newest first
+                guard let cwd = ClaudeCodeSessions.firstCwd(of: transcript.url),
+                      seen.insert(cwd).inserted else { continue }
+                cwds.append(cwd)
+            }
+            index = CwdIndex(builtAt: Date(), cwds: cwds)
+            cwdIndexLock.lock()
+            cwdIndex = index
+            cwdIndexLock.unlock()
+        }
+
+        for cwd in index.cwds {
+            let id: String
+            if let cached = index.projectIdByCwd[cwd] {
+                id = cached
+            } else {
+                id = ProjectIdentity.resolve(cwd: cwd)
+                index.projectIdByCwd[cwd] = id
+                cwdIndexLock.lock()
+                // A cwd's id doesn't depend on the scan generation, so writing into a newer
+                // index (if one raced in) is still correct.
+                cwdIndex?.projectIdByCwd[cwd] = id
+                cwdIndexLock.unlock()
+            }
+            if id == projectId {
                 return ProjectIdentity.repoRoot(cwd: cwd) ?? cwd
             }
         }
