@@ -5,6 +5,18 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.7.4] — 2026-09-11
+
+### Fixed
+
+- **Git worktrees no longer fragment or misdirect a project's memory.** A session in a linked
+  worktree now resolves to the parent repo's project — its recall sees the project's conventions
+  and its captures flow back to them — instead of minting a separate project that was orphaned
+  when the worktree was deleted (repos without a remote), or steering audits and code links at an
+  ephemeral feature-branch checkout (all repos). Branch and commit provenance is still recorded
+  per memory. A one-time migration folds previously fragmented worktree projects back into their
+  parent where the worktree still exists; already-deleted ones age out.
+
 ## [0.7.3] — 2026-09-04
 
 ### Changed
