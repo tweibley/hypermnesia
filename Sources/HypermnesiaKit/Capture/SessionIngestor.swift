@@ -350,7 +350,9 @@ public enum SessionIngestor {
         var total = 0
         var failures = 0
         var classifierFailures = 0
-        var touchedProjects = Set<String>()
+        // Seeded with any projects the worktree-unification fold just merged into, so the
+        // conflict sweep below reconciles duplicates the merge may have introduced.
+        var touchedProjects = WorktreeUnification.runOnce(store: store)
         let threshold = AppConfigStore.loadBestEffort().captureThreshold
         let pending = (try? store.pendingCaptures(limit: max(0, limit))) ?? []
         var processed = 0

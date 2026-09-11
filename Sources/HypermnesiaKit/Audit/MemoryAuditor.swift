@@ -321,7 +321,10 @@ public enum MemoryAuditor {
                 cwdIndexLock.unlock()
             }
             if id == projectId {
-                return ProjectIdentity.repoRoot(cwd: cwd) ?? cwd
+                // Canonical, not the session's toplevel: a session may have run in a linked
+                // worktree (ephemeral, checked out to some feature branch) — audits, code links,
+                // and dreams must target the durable main checkout.
+                return ProjectIdentity.canonicalRepoRoot(cwd: cwd) ?? cwd
             }
         }
         return nil

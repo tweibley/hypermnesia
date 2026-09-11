@@ -327,6 +327,24 @@ public final class MemoryStore: Sendable {
         }
     }
 
+    /// Fold every row of project `from` into project `to` — the worktree-unification migration.
+    /// Nodes keep their UUID ids, so only tables with `projectId` in a uniqueness constraint need
+    /// collision handling: an edge or journal row that already exists under `to` wins and the
+    /// `from` duplicate is dropped. The FTS index joins through `node_id` and needs no touch-up.
+    public func reassignProject(from: String, to: String) throws {
+        guard from != to else { return }
+        try dbQueue.write { db in
+            let arguments: StatementArguments = ["from": from, "to": to]
+            try db.execute(sql: "UPDATE memory_node SET projectId = :to WHERE projectId = :from", arguments: arguments)
+            try db.execute(sql: "UPDATE OR IGNORE memory_edge SET projectId = :to WHERE projectId = :from", arguments: arguments)
+            try db.execute(sql: "DELETE FROM memory_edge WHERE projectId = :from", arguments: ["from": from])
+            try db.execute(sql: "UPDATE capture_queue SET projectId = :to WHERE projectId = :from", arguments: arguments)
+            try db.execute(sql: "UPDATE processed_session SET projectId = :to WHERE projectId = :from", arguments: arguments)
+            try db.execute(sql: "UPDATE session_progress SET projectId = :to WHERE projectId = :from", arguments: arguments)
+            try db.execute(sql: "UPDATE OR IGNORE dream_journal SET projectId = :to WHERE projectId = :from", arguments: arguments)
+        }
+    }
+
     /// Delete finished (done/error) capture-queue rows older than the retention window. Terminal
     /// rows are only useful for short-term inspection (`drain --dry-run`, doctor); without pruning
     /// they accumulate one per session forever. Pending/processing rows are never touched.

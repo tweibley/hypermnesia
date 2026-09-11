@@ -11,7 +11,7 @@ public enum ProjectIdentity {
         if let remote = gitRemote(cwd: cwd), let normalized = normalizeRemote(remote) {
             return normalized
         }
-        return normalizePath(repoRoot(cwd: cwd) ?? cwd)
+        return normalizePath(canonicalRepoRoot(cwd: cwd) ?? cwd)
     }
 
     /// Human-friendly name for a project id: `github.com/acme/app` → `acme/app`,
@@ -36,12 +36,32 @@ public enum ProjectIdentity {
         return url.isEmpty ? nil : url
     }
 
-    /// Top-level directory of the repo containing `cwd`, if any.
+    /// Top-level directory of the repo containing `cwd`, if any. In a linked worktree this is the
+    /// WORKTREE's toplevel — the right base for relativizing that session's file paths, but not a
+    /// durable identity; use `canonicalRepoRoot` for that.
     static func repoRoot(cwd: String) -> String? {
         let result = Shell.run("git", ["-C", cwd, "rev-parse", "--show-toplevel"], cwd: cwd)
         guard result.succeeded else { return nil }
         let path = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : path
+    }
+
+    /// Top-level of the MAIN repository containing `cwd`: a linked worktree resolves to the parent
+    /// repo's working tree, so every worktree of a repo shares one identity and one durable path
+    /// (worktrees are routinely deleted; conventions and decisions belong to the project).
+    ///
+    /// `--git-common-dir` names the shared `.git` from any linked worktree, and a main checkout
+    /// answers `<root>/.git` too, so trimming the suffix is uniform. A submodule's common dir
+    /// lives under `<super>/.git/modules/…` — no `/.git` suffix — and deliberately keeps its own
+    /// toplevel. Any git too old for `--path-format` fails the call and falls back to `repoRoot`.
+    static func canonicalRepoRoot(cwd: String) -> String? {
+        let result = Shell.run(
+            "git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd: cwd)
+        if result.succeeded {
+            let common = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            if common.hasSuffix("/.git") { return String(common.dropLast("/.git".count)) }
+        }
+        return repoRoot(cwd: cwd)
     }
 
     /// Current commit SHA, if in a repo.
