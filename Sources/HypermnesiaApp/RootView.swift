@@ -131,7 +131,7 @@ struct SidebarView: View {
         .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
         .listRowBackground(Color.clear)
         .contextMenu {
-            Button("Import CLAUDE.md conventions…") { model.importClaudeMd(projectId: project) }
+            Button("Import CLAUDE.md & Claude memories…") { model.importClaudeMd(projectId: project) }
             Button("Export memory digest…") { exportDigest(project) }
             Divider()
             Button("Remove this project's memories…", role: .destructive) {

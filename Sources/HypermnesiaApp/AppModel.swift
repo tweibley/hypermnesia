@@ -702,8 +702,9 @@ final class AppModel {
         if let snapshot { recordUndo("Edited “\(snapshot.title)”", restoring: [snapshot]) }
     }
 
-    /// Bootstrap draft memories from the project's hand-written CLAUDE.md / .claude/rules — the
-    /// conventions a team already maintains become reviewable drafts on day zero.
+    /// Bootstrap draft memories from what already exists: the project's hand-written CLAUDE.md /
+    /// .claude/rules conventions, plus Claude Code's own auto-memory files for the repo — both
+    /// become reviewable drafts on day zero.
     func importClaudeMd(projectId: String) {
         guard let store else { return }
         guard let repoPath = MemoryAuditor.repoPath(forProjectId: projectId) else {
@@ -711,14 +712,18 @@ final class AppModel {
             return
         }
         do {
-            let outcome = try ClaudeMdImporter.importProject(
+            let fromMd = try ClaudeMdImporter.importProject(
                 projectPath: repoPath, projectId: projectId, store: store)
-            processingStatus = outcome.created.isEmpty
-                ? "Nothing new to import (\(outcome.duplicatesSkipped) already known)."
-                : "Imported \(outcome.created.count) draft\(outcome.created.count == 1 ? "" : "s") from CLAUDE.md — review them in the inbox."
+            let fromMemory = try ClaudeMemoryImporter.importProject(
+                projectPath: repoPath, projectId: projectId, store: store)
+            let created = fromMd.created.count + fromMemory.created.count
+            let duplicates = fromMd.duplicatesSkipped + fromMemory.duplicatesSkipped
+            processingStatus = created == 0
+                ? "Nothing new to import (\(duplicates) already known)."
+                : "Imported \(created) draft\(created == 1 ? "" : "s") from CLAUDE.md and Claude Code memory — review them in the inbox."
             lastActionError = nil
         } catch {
-            lastActionError = "CLAUDE.md import failed: \(error.localizedDescription)"
+            lastActionError = "Import failed: \(error.localizedDescription)"
         }
         reloadProjects()
     }

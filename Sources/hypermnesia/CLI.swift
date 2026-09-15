@@ -28,6 +28,7 @@ struct HypermnesiaCLI: AsyncParsableCommand {
         groupedSubcommands: [
             CommandGroup(name: "Memories", subcommands: [
                 List.self, Show.self, Delete.self, Export.self, ImportClaudeMd.self,
+                ImportClaudeMemories.self,
                 Ask.self, Recall.self, Audit.self, Dream.self,
             ]),
             CommandGroup(name: "Capture", subcommands: [

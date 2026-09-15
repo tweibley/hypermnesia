@@ -265,6 +265,40 @@ struct ImportClaudeMd: AsyncParsableCommand {
     }
 }
 
+struct ImportClaudeMemories: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "import-claude-memories",
+        abstract: "Import Claude Code's auto-memory files (~/.claude/projects/…/memory) as draft memories."
+    )
+
+    @Option(name: .long, help: "Repository path (defaults to the current directory).")
+    var project: String?
+
+    @Flag(name: .long, help: "Show what would be imported without writing.")
+    var dryRun = false
+
+    func run() async throws {
+        let path = project.map { ($0 as NSString).expandingTildeInPath } ?? FileManager.default.currentDirectoryPath
+        let sources = ClaudeMemoryImporter.sourceFiles(projectPath: path)
+        guard !sources.isEmpty else {
+            print("No Claude Code auto-memory found for \(path) "
+                  + "(looked in \(ClaudeMemoryImporter.memoryDirectory(projectPath: path).path)).")
+            throw ExitCode.failure
+        }
+        let store = try MemoryStore()
+        let outcome = try ClaudeMemoryImporter.importProject(
+            projectPath: path, projectId: resolveProjectId(project), store: store, dryRun: dryRun)
+        for node in outcome.created {
+            print("  [\(node.type.rawValue)] \(node.title)")
+        }
+        print("\(dryRun ? "Would import" : "Imported") \(outcome.created.count) draft(s); "
+              + "skipped \(outcome.duplicatesSkipped) duplicate(s) across \(sources.count) file(s).")
+        if !dryRun, !outcome.created.isEmpty {
+            print("Review them in the app's inbox — imported drafts are never injected until confirmed.")
+        }
+    }
+}
+
 // MARK: - recall
 
 /// `hypermnesia recall <query>` — the CLI counterpart of the MCP `recall` tool, so the pull path
