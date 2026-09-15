@@ -5,6 +5,19 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-09-15
+
+### Added
+
+- **Import Claude Code's own memories.** Claude Code keeps per-project auto-memory (the
+  memory-tool files under `~/.claude/projects/…/memory/`) — Hypermnesia can now bootstrap from
+  it. Each memory file becomes one typed draft (feedback → convention, user/reference → fact,
+  project notes through the usual heuristics) that waits in the review inbox like any other
+  capture — nothing auto-confirms or injects until you approve it. Duplicates of memories you
+  already have are skipped, and re-importing is safe. Available as
+  `hypermnesia import-claude-memories` and folded into the app's import action, which now pulls
+  CLAUDE.md, `.claude/rules`, and auto-memories in one click.
+
 ## [0.7.4] — 2026-09-11
 
 ### Fixed
