@@ -107,7 +107,7 @@ public enum HookInstaller: HookInstallerType {
             for entry in array where entryHasMarker(entry) {
                 for hook in (entry["hooks"] as? [[String: Any]]) ?? [] {
                     guard let command = hook["command"] as? String,
-                          command.contains(marker) || command.contains(legacyMarker),
+                          isOurCommand(command),
                           let path = recordedBinaryPath(inCommand: command),
                           !paths.contains(path) else { continue }
                     paths.append(path)
@@ -146,7 +146,56 @@ public enum HookInstaller: HookInstallerType {
     private static func entryHasMarker(_ entry: [String: Any]) -> Bool {
         (entry["hooks"] as? [[String: Any]])?.contains { hook in
             guard let command = hook["command"] as? String else { return false }
-            return command.contains(marker) || command.contains(legacyMarker)
+            return isOurCommand(command)
         } ?? false
+    }
+
+    /// Whether a hook command invokes our binary: its executable (the first shell word, after any
+    /// leading `VAR=value` assignments) is named `hypermnesia` or the pre-rename `hyperthymesia`.
+    /// A substring match on the whole command is not enough — it also claims a user's own hook
+    /// that merely mentions the name (`cd ~/hypermnesia && ./notify.sh`), and install/uninstall
+    /// would then delete it.
+    static func isOurCommand(_ command: String) -> Bool {
+        var rest = Substring(command)
+        while true {
+            rest = rest.drop(while: { $0 == " " || $0 == "\t" })
+            guard let word = firstShellWord(of: rest) else { return false }
+            if isEnvironmentAssignment(word.text) {
+                rest = word.remainder
+                continue
+            }
+            let name = (word.text as NSString).lastPathComponent
+            return name == marker || name == legacyMarker
+        }
+    }
+
+    /// The first shell word of `text`, unquoted (single quotes, double quotes, backslash escapes),
+    /// plus what follows it. Nil when `text` is empty or a quote never closes.
+    private static func firstShellWord(of text: Substring) -> (text: String, remainder: Substring)? {
+        guard !text.isEmpty else { return nil }
+        var word = ""
+        var index = text.startIndex
+        while index < text.endIndex {
+            let ch = text[index]
+            if ch == " " || ch == "\t" || ch == ";" || ch == "&" || ch == "|" { break }
+            if ch == "'" || ch == "\"" {
+                guard let close = text[text.index(after: index)...].firstIndex(of: ch) else { return nil }
+                word += text[text.index(after: index)..<close]
+                index = text.index(after: close)
+            } else if ch == "\\", text.index(after: index) < text.endIndex {
+                word.append(text[text.index(after: index)])
+                index = text.index(index, offsetBy: 2)
+            } else {
+                word.append(ch)
+                index = text.index(after: index)
+            }
+        }
+        return word.isEmpty ? nil : (word, text[index...])
+    }
+
+    private static func isEnvironmentAssignment(_ word: String) -> Bool {
+        guard let eq = word.firstIndex(of: "="), eq != word.startIndex else { return false }
+        return word[..<eq].allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+            && !(word.first?.isNumber ?? true)
     }
 }

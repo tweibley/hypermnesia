@@ -7,7 +7,8 @@ struct TriageTests {
     private func draft() -> MemoryNode {
         MemoryNode(projectId: "p", type: .convention, status: .draft, title: "Use tabs",
                    summary: "Always use tabs for indentation",
-                   data: .convention(.init(rule: "Always use tabs for indentation")), confidence: 0.8)
+                   data: .convention(.init(rule: "Always use tabs for indentation")), confidence: 0.8,
+                   conversationId: "s1")   // a captured draft — only those auto-confirm by sighting
     }
     private func duplicate() -> MemoryNode {
         MemoryNode(projectId: "p", type: .convention, status: .draft, title: "Tabs",

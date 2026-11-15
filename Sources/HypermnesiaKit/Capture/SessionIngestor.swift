@@ -313,8 +313,27 @@ public enum SessionIngestor {
         /// How many of `failures` were classifier errors (vs missing/unreadable transcripts or
         /// persistence failures) — a "check your classifier settings" hint is only apt for these.
         public let classifierFailures: Int
+        /// The pass stopped before reaching every queued session because the classifier failed
+        /// `classifierFailureLimit` times in a row; the untouched sessions stay pending.
+        public let stoppedEarly: Bool
+
+        init(added: Int, failures: Int, classifierFailures: Int, stoppedEarly: Bool = false) {
+            self.added = added
+            self.failures = failures
+            self.classifierFailures = classifierFailures
+            self.stoppedEarly = stoppedEarly
+        }
+
         public static let idle = DrainReport(added: 0, failures: 0, classifierFailures: 0)
     }
+
+    /// Consecutive classifier failures that end a drain pass. A classifier that is down (logged
+    /// out, gateway rejecting) fails every session the same way; without a stop, each pass spends
+    /// one of `maxAttempts` on every queued session, and every Stop hook starts a pass — a short
+    /// outage would push the whole queue to terminal errors. Stopping charges only the sessions
+    /// that were actually tried; a success in between resets the count, so a few genuinely
+    /// unclassifiable sessions still use up their own budget and go terminal.
+    static let classifierFailureLimit = 3
 
     /// Drain the capture queue: classify each pending session (incrementally) into memories.
     /// Coordinated by an advisory file lock so the app and the CLI never drain at the same time —
@@ -356,7 +375,13 @@ public enum SessionIngestor {
         let threshold = AppConfigStore.loadBestEffort().captureThreshold
         let pending = (try? store.pendingCaptures(limit: max(0, limit))) ?? []
         var processed = 0
+        var consecutiveClassifierFailures = 0
+        var stoppedEarly = false
         for stale in pending {
+            if consecutiveClassifierFailures >= classifierFailureLimit {
+                stoppedEarly = true
+                break
+            }
             defer {
                 processed += 1
                 progress?(processed, pending.count, total)
@@ -373,6 +398,12 @@ public enum SessionIngestor {
                 classifier: classifier, store: store, minNewEvents: threshold,
                 isFinal: item.isFinal, commitSha: item.gitSha, source: item.source
             )
+
+            if case .failed(let reason, _) = outcome, reason.hasPrefix(classificationFailedPrefix) {
+                consecutiveClassifierFailures += 1
+            } else {
+                consecutiveClassifierFailures = 0
+            }
 
             switch outcome {
             case .captured(let count):
@@ -432,7 +463,8 @@ public enum SessionIngestor {
         for projectId in touchedProjects {
             ConflictEngine.sweep(store: store, projectId: projectId)
         }
-        return DrainReport(added: total, failures: failures, classifierFailures: classifierFailures)
+        return DrainReport(added: total, failures: failures, classifierFailures: classifierFailures,
+                           stoppedEarly: stoppedEarly)
     }
 
     /// Drop a managed snapshot only when no other queue row still needs it, and only when a
@@ -603,13 +635,16 @@ public enum SessionIngestor {
                 }
             }
             // Deliberately do NOT reset confidence — that would silently undo an audit penalty. A
-            // repeat sighting auto-confirms a draft after `autoConfirm` reinforcements.
-            if existing.status == .draft, autoConfirm > 0, existing.timesApplied >= autoConfirm {
+            // repeat sighting auto-confirms a draft after `autoConfirm` reinforcements — except the
+            // drafts the review gate exists for, the same two `retriageDrafts` holds back:
+            // revisions (confirming one retires an accepted memory) and drafts that did not come
+            // from a captured session (MCP `remember`, imports). Without this a `remember` draft
+            // is confirmed by the capture of the very session that wrote it.
+            if existing.status == .draft, autoConfirm > 0, existing.timesApplied >= autoConfirm,
+               existing.supersedesId == nil, existing.conversationId != nil {
                 existing.status = .confirmed
             }
             try? store.upsert(existing)
-            // Auto-confirm is a confirm path: a draft that carried a revision link now supersedes.
-            ConflictEngine.applySupersede(for: existing, store: store)
             if let index = pool.firstIndex(where: { $0.id == existing.id }) { pool[index] = existing }
             pools[node.type] = pool
         }

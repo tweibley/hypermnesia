@@ -176,7 +176,7 @@ struct CodeRefExtractorTests {
             projectId: projectId, type: .codeRef, status: .draft,
             title: "DB.swift", summary: "Sources/DB.swift",
             data: .codeRef(.init(filePath: "Sources/DB.swift", snippet: "v1")),
-            confidence: 0.9, belief: 0.9, createdAt: when, commitSha: "aaa"
+            confidence: 0.9, belief: 0.9, createdAt: when, conversationId: "s1", commitSha: "aaa"
         )
         let fresh = SessionIngestor.reconcile(
             [draft], projectId: projectId, store: store,

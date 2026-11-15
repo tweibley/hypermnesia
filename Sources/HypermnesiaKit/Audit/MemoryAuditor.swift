@@ -129,8 +129,11 @@ public enum MemoryAuditor {
         """
         for node in nodes {
             let snippets = node.data.relatedFiles.prefix(3).compactMap { file -> String? in
-                let path = absolutePath(file, repoPath: repoPath)
-                guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+                // Only files inside the repo are sent to the model. `relatedFiles` can hold
+                // absolute paths outside it (ingest keeps those as-is), and a memory that lists
+                // a credentials file must not get that file uploaded.
+                guard let path = pathInsideRepo(file, repoPath: repoPath),
+                      let content = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
                 return "FILE \(file):\n" + String(content.prefix(4000))
             }
             guard !snippets.isEmpty else { continue }
@@ -330,7 +333,37 @@ public enum MemoryAuditor {
         return nil
     }
 
+    /// The directory an audit should check `cwd`'s project against: the main checkout's root, so
+    /// repo-relative `relatedFiles` resolve from any subdirectory or linked worktree. Nil when
+    /// `cwd` is not an existing directory.
+    public static func auditRoot(cwd: String) -> String? {
+        guard isExistingDirectory(cwd) else { return nil }
+        return ProjectIdentity.canonicalRepoRoot(cwd: cwd) ?? cwd
+    }
+
+    /// `repoPath(forProjectId:)`, but nil when that directory is gone (a deleted worktree, a moved
+    /// repo, an unmounted volume). Auditing against a missing directory reports every related
+    /// file as missing and records drift on every file-backed memory, so audits must skip it.
+    public static func auditableRepoPath(forProjectId projectId: String) -> String? {
+        guard let path = repoPath(forProjectId: projectId), isExistingDirectory(path) else { return nil }
+        return path
+    }
+
     // MARK: - Helpers
+
+    static func isExistingDirectory(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+
+    /// The symlink-resolved absolute path of `file` when it lies inside `repoPath`, else nil
+    /// (absolute paths elsewhere, `..` escapes, symlinks pointing out of the repo).
+    static func pathInsideRepo(_ file: String, repoPath: String) -> String? {
+        let root = CanonicalPath.resolve(repoPath)
+        let resolved = CanonicalPath.resolve(absolutePath(file, repoPath: repoPath))
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        return resolved.hasPrefix(prefix) ? resolved : nil
+    }
 
     static func absolutePath(_ file: String, repoPath: String) -> String {
         file.hasPrefix("/") ? file : (repoPath as NSString).appendingPathComponent(file)

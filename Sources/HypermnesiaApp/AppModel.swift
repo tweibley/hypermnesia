@@ -815,7 +815,9 @@ final class AppModel {
             defaults.set(Date(), forKey: key)
             let changed = await Task.detached { () -> Bool in
                 var didWork = false
-                if let repoPath = MemoryAuditor.repoPath(forProjectId: project) {
+                // Skip the audit when the project's directory is gone — it would mark every
+                // file-backed memory as drifted.
+                if let repoPath = MemoryAuditor.auditableRepoPath(forProjectId: project) {
                     // Heal git-renamed codeRefs before the read-only audit flags them as missing.
                     MemoryAuditor.repairCodeRefPaths(store: store, projectId: project, repoPath: repoPath)
                     let findings = MemoryAuditor.audit(store: store, projectId: project, repoPath: repoPath)
@@ -972,7 +974,7 @@ final class AppModel {
             guard let self else { return }
             if deep { self.processingStatus = "Deep check: asking the model about each memory…" }
             let result = await Task.detached { () -> (issues: Int, flagged: Int)? in
-                guard let repoPath = MemoryAuditor.repoPath(forProjectId: project) else { return nil }
+                guard let repoPath = MemoryAuditor.auditableRepoPath(forProjectId: project) else { return nil }
                 // Heal git-renamed codeRefs before the read-only audit flags them as missing.
                 MemoryAuditor.repairCodeRefPaths(store: store, projectId: project, repoPath: repoPath)
                 var findings = MemoryAuditor.audit(store: store, projectId: project, repoPath: repoPath)
