@@ -117,6 +117,7 @@ public final class MemoryStore: Sendable {
     public func hardDeleteNode(id: String) throws {
         _ = try dbQueue.write { db -> Bool in
             try db.execute(sql: "DELETE FROM memory_fts WHERE node_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM memory_embedding WHERE nodeId = ?", arguments: [id])
             return try MemoryNode.deleteOne(db, key: id)
         }
     }
@@ -342,6 +343,9 @@ public final class MemoryStore: Sendable {
             try db.execute(sql: "UPDATE processed_session SET projectId = :to WHERE projectId = :from", arguments: arguments)
             try db.execute(sql: "UPDATE session_progress SET projectId = :to WHERE projectId = :from", arguments: arguments)
             try db.execute(sql: "UPDATE OR IGNORE dream_journal SET projectId = :to WHERE projectId = :from", arguments: arguments)
+            // Rows the OR IGNORE left behind collided with a night `to` already has; drop them so
+            // nothing stays stranded under a project id that no longer has memories.
+            try db.execute(sql: "DELETE FROM dream_journal WHERE projectId = :from", arguments: ["from": from])
         }
     }
 

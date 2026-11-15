@@ -201,7 +201,12 @@ struct Audit: AsyncParsableCommand {
 
     func run() async throws {
         setvbuf(stdout, nil, _IONBF, 0)
-        let repoPath = (project as NSString?)?.expandingTildeInPath ?? FileManager.default.currentDirectoryPath
+        let given = (project as NSString?)?.expandingTildeInPath ?? FileManager.default.currentDirectoryPath
+        // Memories record repo-relative files, so check against the repo root, not the directory
+        // the command happened to run in — from a subdirectory every file would read as missing.
+        guard let repoPath = MemoryAuditor.auditRoot(cwd: given) else {
+            throw ValidationError("\(given) is not a directory.")
+        }
         let projectId = ProjectIdentity.resolve(cwd: repoPath)
         let store = try MemoryStore()
 
@@ -756,6 +761,10 @@ struct Drain: AsyncParsableCommand {
         if pending > 0 { print("Draining \(pending) session(s) via \(Classifiers.cliDescription(classifier: classifier))…") }
         let report = await SessionIngestor.drainQueue(store: store, classifier: engine, limit: limit)
         print(report.added > 0 ? "Done. \(report.added) new memories." : "Nothing to do.")
+        if report.stoppedEarly {
+            FileHandle.standardError.write(Data(
+                "Stopped early: the classifier failed \(report.classifierFailures) times in a row. The remaining sessions stay queued.\n".utf8))
+        }
         if report.failures > 0 {
             FileHandle.standardError.write(Data(
                 "\(report.failures) session(s) failed to classify and will be retried; check your classifier configuration (`hypermnesia doctor`).\n".utf8))

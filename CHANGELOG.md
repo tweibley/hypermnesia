@@ -5,6 +5,29 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`hypermnesia audit` checks against the repo root.** Run from a subdirectory, it reported
+  every related file as missing, and `--apply` then penalized those memories.
+- **Audits skip a project whose directory is gone** (deleted worktree, moved repo, unmounted
+  drive) instead of marking all of its file-backed memories as drifted.
+- **`audit --deep` only sends files inside the repo to the model.** A memory that listed a file
+  elsewhere on disk had that file's contents included in the prompt.
+- **Installing or removing hooks no longer deletes your own hooks that mention "hypermnesia"**,
+  such as a script kept in a `~/hypermnesia` checkout. Only commands that run the Hypermnesia
+  binary are treated as ours.
+- **Deleting a memory also deletes its embedding**, and folding a worktree's project into its
+  parent no longer leaves Dream Journal rows behind.
+
+### Changed
+
+- **A repeat sighting no longer confirms a revision draft or a draft saved through the MCP
+  `remember` tool.** Both wait for you in the review inbox, as the tool description says.
+  Captured drafts still auto-confirm on a repeat sighting.
+- **A drain stops after three classifier failures in a row.** When the classifier is down
+  (logged out, gateway error), the rest of the queue keeps its retry budget instead of every
+  queued session moving toward a terminal error.
+
 ## [0.8.1] — 2026-11-14
 
 ### Changed

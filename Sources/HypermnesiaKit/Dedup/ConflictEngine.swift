@@ -8,8 +8,8 @@ import Foundation
 /// injecting alongside the decision that replaced it.
 ///
 /// The human-review gate is preserved: capture only *links* the candidate (`supersedesId` on the
-/// draft); the old memory is marked superseded (`supersededById`) only when the draft is confirmed
-/// — by the user or by reinforcement auto-confirm. Dismissing the draft leaves the old memory
+/// draft); the old memory is marked superseded (`supersededById`) only when the user confirms the
+/// draft — no auto-confirm path confirms a revision. Dismissing the draft leaves the old memory
 /// untouched.
 public enum ConflictEngine {
 

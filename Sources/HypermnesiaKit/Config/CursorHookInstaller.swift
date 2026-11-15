@@ -12,8 +12,6 @@ import Foundation
 ///
 /// Cursor has no per-prompt context-injection hook, so hydration is `sessionStart`-only.
 public enum CursorHookInstaller: HookInstallerType {
-    static let marker = "hypermnesia"
-    static let legacyMarker = "hyperthymesia"   // pre-rename hooks must stay detectable/removable
     static let hydrateEvents = ["sessionStart"]
     static let captureEvents = ["stop", "sessionEnd"]
     /// Notch working state: a submitted prompt starts a turn…
@@ -112,10 +110,8 @@ public enum CursorHookInstaller: HookInstallerType {
     }
 
     private static func entryHasMarker(_ entry: [String: Any]) -> Bool {
-        {
-            guard let command = entry["command"] as? String else { return false }
-            return command.contains(marker) || command.contains(legacyMarker)
-        }()
+        guard let command = entry["command"] as? String else { return false }
+        return HookInstaller.isOurCommand(command)
     }
 
     // MARK: - Helpers
