@@ -8,7 +8,7 @@ import Foundation
 /// (it returns empty in the current CLI build); JSON is enforced via the prompt. Hook recursion is
 /// prevented by `HYPERMNESIA_DISABLE=1`, which the installed hook scripts honor.
 public struct ClaudeHeadlessClassifier: Classifier {
-    public static let defaultModel = "claude-haiku-4-5-20251001"
+    public static let defaultModel = "claude-haiku-5-5"
 
     public var claudePath: String
     /// Model for classification. `nil` uses the CLI default.

@@ -422,7 +422,7 @@ private struct ClassifierSettings: View {
                 }
                 HStack {
                     Text("Claude model").frame(width: 130, alignment: .leading)
-                    TextField("claude-haiku-4-5-20251001", text: $model.config.claudeModel).textFieldStyle(.roundedBorder)
+                    TextField("claude-haiku-5-5", text: $model.config.claudeModel).textFieldStyle(.roundedBorder)
                 }
                 HStack {
                     Text("Antigravity model").frame(width: 130, alignment: .leading)

@@ -5,6 +5,12 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **The default Claude classifier model is now `claude-haiku-5-5`** (was
+  `claude-haiku-4-5-20251001`). This only affects installs that have not set a model in
+  Settings; a model you chose yourself is left alone.
+
 ## [0.8.0] — 2026-09-15
 
 ### Added
