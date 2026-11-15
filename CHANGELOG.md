@@ -5,6 +5,8 @@ versions follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-11-14
+
 ### Fixed
 
 - **`hypermnesia audit` checks against the repo root.** Run from a subdirectory, it reported
